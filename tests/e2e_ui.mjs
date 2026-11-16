@@ -55,7 +55,7 @@ function check(cond, msg) {
 let { ctx, page } = await session(phone, "sales-a", "pass-sales-a");
 await shot(page, "销售-我的订单");
 await page.click("a[href='#/new']");
-await page.waitForSelector("text=新建订单");
+await page.waitForSelector("h1:has-text('新建订单')");
 await page.setInputFiles("label.photo-add input[type=file]", PHOTO);
 await page.fill("input[placeholder*='5W-30']", "0W-20");
 await page.fill("input[type=number]", "6");
