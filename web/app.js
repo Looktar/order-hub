@@ -103,7 +103,7 @@ function itemsText(items) {
   return items.filter((i) => !i.removed).map((i) => `${catLabel(i.category)}${i.spec ? " " + i.spec : ""} × ${qu(i.qty, i.unit)}`);
 }
 function statusChip(o) {
-  const cls = { pending: "", assigned: "blue", delivering: "blue", delivered: "ok" }[o.status];
+  const cls = { pending: "", assigned: "blue", delivering: "blue", delivered: "ok", cancelled: "bad" }[o.status];
   return h("span", { class: `chip ${cls}` }, o.status === "delivered" ? [icon(I.check, 12), statusLabel("delivered")] : statusLabel(o.status));
 }
 function flagChips(o) {
@@ -211,7 +211,7 @@ function bootstrapView() {
 // ------------------------------------------------------------------ 首页：按角色
 async function loadOrders() {
   const { data, error } = await sb.from("orders")
-    .select("id,status,customer,address,due_date,has_issue,modified_by,created_at,updated_at,assigned_at,started_at,delivered_at,sales:profiles!orders_sales_id_fkey(name),driver:profiles!orders_driver_id_fkey(name),order_items(category,spec,qty,unit,removed,position)")
+    .select("id,status,customer,address,due_date,contact,note,has_issue,modified_by,created_at,updated_at,assigned_at,started_at,delivered_at,cancelled_at,cancel_reason,sales:profiles!orders_sales_id_fkey(name),driver:profiles!orders_driver_id_fkey(name),order_items(category,spec,qty,unit,removed,position)")
     .order("id", { ascending: false }).limit(300);
   if (error) throw error;
   for (const o of data) o.order_items.sort((a, b) => a.position - b.position);
@@ -234,7 +234,7 @@ function orderCard(o) {
 }
 // 卡片底部：最近一个环节的时间
 function stageLine(o) {
-  const [key, ts] = o.delivered_at ? ["ts_delivered", o.delivered_at] : o.started_at ? ["ts_started", o.started_at]
+  const [key, ts] = o.cancelled_at ? ["ts_cancelled", o.cancelled_at] : o.delivered_at ? ["ts_delivered", o.delivered_at] : o.started_at ? ["ts_started", o.started_at]
     : o.assigned_at ? ["ts_assigned", o.assigned_at] : [null, null];
   const parts = [];
   if (key) parts.push(h("span", {}, t(key, { t: "" }), timeEl(ts)));
@@ -245,24 +245,29 @@ function stageLine(o) {
 async function homeView() {
   const orders = await loadOrders();
   if (me.role === "company") return boardView(orders);
-  const active = orders.filter((o) => o.status !== "delivered");
-  const done = orders.filter((o) => o.status === "delivered").slice(0, 20);
+  const closed = (o) => o.status === "delivered" || o.status === "cancelled";
+  const rank = { delivering: 0, assigned: 1, pending: 2 };
+  const active = orders.filter((o) => !closed(o)).sort((a, b) =>
+    (rank[a.status] - rank[b.status]) || (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.id - b.id);
+  const done = orders.filter(closed).slice(0, 20);
+  const card = me.role === "driver" ? driverCard : orderCard;
   shell(h("div", { class: "narrow stack" },
     h("h1", { style: "font-size:20px" }, me.role === "sales" ? t("my_orders") : t("my_deliveries")),
     me.role === "sales" ? h("p", { class: "small muted", style: "margin:0" }, t("agent_hint")) : null,
     h("h2", { class: "small muted" }, t("in_progress", { n: active.length })),
-    h("div", { class: "list" }, active.length ? active.map(orderCard) : h("div", { class: "empty" }, me.role === "sales" ? t("no_active_orders") : t("no_deliveries"))),
-    done.length ? [h("h2", { class: "small muted" }, t("recent_delivered")), h("div", { class: "list" }, done.map(orderCard))] : null,
+    h("div", { class: "list" }, active.length ? active.map(card) : h("div", { class: "empty" }, me.role === "sales" ? t("no_active_orders") : t("no_deliveries"))),
+    done.length ? [h("h2", { class: "small muted" }, t("recent_done")), h("div", { class: "list" }, done.map(orderCard))] : null,
   ));
 }
 
 let boardFilter = "all";
 function boardView(orders) {
   const F = {
-    all: ["f_all", () => true],
-    modified: ["f_modified", (o) => !!o.modified_by],
+    all: ["f_all", (o) => o.status !== "cancelled"],
+    modified: ["f_modified", (o) => !!o.modified_by && o.status !== "cancelled"],
     today: ["f_today", (o) => o.status !== "delivered" && o.due_date === today()],
-    issue: ["f_issue", (o) => o.has_issue],
+    issue: ["f_issue", (o) => o.has_issue && o.status !== "cancelled"],
+    cancelled: ["f_cancelled", (o) => o.status === "cancelled"],
   };
   const filters = h("nav", { class: "filters", "aria-label": t("filters") },
     Object.entries(F).map(([k, [label, fn]]) => h("button", {
@@ -270,7 +275,8 @@ function boardView(orders) {
       onclick: () => { boardFilter = k; boardView(orders); },
     }, h("span", {}, t(label)), h("span", { class: "muted" }, orders.filter(fn).length))));
   const shown = orders.filter(F[boardFilter][1]);
-  const board = h("div", { class: "board" }, STATUS_ORDER.map((s) => {
+  const cols = boardFilter === "cancelled" ? ["cancelled"] : STATUS_ORDER;
+  const board = h("div", { class: "board" }, cols.map((s) => {
     const list = shown.filter((o) => o.status === s);
     const visible = s === "delivered" ? list.slice(0, 30) : list;
     return h("section", { class: "col", "aria-label": statusLabel(s) },
@@ -355,13 +361,16 @@ async function orderView(id) {
   const urls = await signedUrls(d.photos.map((p) => p.path));
   if (me.role === "driver") return driverView(d, urls);
 
-  const canEdit = (me.role === "company" && d.status !== "delivered") || (me.role === "sales" && d.status === "pending" && d.sales?.id === me.id);
+  const open = !["delivered", "cancelled"].includes(d.status);
+  const canEdit = (me.role === "company" && open) || (me.role === "sales" && d.status === "pending" && d.sales?.id === me.id);
   const head = h("div", { class: "row" },
     h("span", { class: "muted small" }, `#${d.id}`), h("h1", { style: "font-size:20px" }, d.customer),
     statusChip(d), flagChips(d), h("span", { class: "spacer" }),
-    canEdit ? h("a", { href: `#/order/${d.id}/edit`, class: "btn" }, t("edit_order")) : null);
+    canEdit ? h("a", { href: `#/order/${d.id}/edit`, class: "btn" }, t("edit_order")) : null,
+    me.role === "company" && open ? h("a", { href: `#/order/${d.id}/cancel`, class: "btn danger", "data-action": "cancel" }, t("cancel_order")) : null);
 
   const actions = [];
+  if (d.status === "cancelled") actions.push(h("div", { class: "err", "data-state": "cancelled" }, t("cancelled_info", { t: fmtFull(d.cancelled_at), r: d.cancel_reason })));
   if (me.role === "company" && ["pending", "assigned"].includes(d.status)) actions.push(await assignBox(d));
   if (me.role === "company" && d.has_issue) actions.push(h("div", { class: "card" }, h("h2", {}, t("issue_title")),
     h("div", { class: "note" }, d.issue_note || t("issue_default")),
@@ -422,7 +431,7 @@ function photosCard(d, urls) {
       list.length ? h("div", { class: "photos" }, list.map((p) => h("a", { href: urls[p.path] || "#", target: "_blank", rel: "noopener" },
         h("img", { class: "photo", src: urls[p.path] || "", alt: title, loading: "lazy" })))) : h("span", { class: "tiny muted" }, t("none_yet")));
   };
-  const canAdd = (me.role === "company" && d.status !== "delivered") || (me.role === "sales" && d.status === "pending");
+  const canAdd = (me.role === "company" && !["delivered", "cancelled"].includes(d.status)) || (me.role === "sales" && d.status === "pending");
   return h("section", { class: "card" }, h("h2", {}, t("photos")), group("order", t("order_photos")), group("signoff", t("signoff_photos")),
     canAdd ? h("label", { class: "btn" }, icon(I.cam, 16), t("add_order_photo"), pickPhotos(async (fs) => {
       try { for (const f of fs) await uploadPhoto(d.id, "order", f); toast(t("photo_uploaded")); route(); } catch (e) { toast(errText(e)); }
@@ -436,11 +445,57 @@ async function assignBox(d) {
     h("div", { class: "row" }, h("label", { class: "sr", for: "drv" }, t("driver")), h("div", { style: "flex:1 1 200px" }, sel),
       h("button", { class: "btn primary", type: "button", "data-action": "assign", onclick: async (e) => {
         if (!sel.value) return toast(t("choose_driver_first"));
-        e.currentTarget.disabled = true;
+        const btn = e.currentTarget; btn.disabled = true;
         try { await rpc("assign_driver", { p_order: d.id, p_driver: sel.value, p_via: null }); toast(t("assigned_toast")); route(); }
-        catch (ex) { toast(errText(ex)); e.target.disabled = false; }
+        catch (ex) { toast(errText(ex)); btn.disabled = false; }
       } }, t("assign"))),
     (drivers || []).length ? null : h("p", { class: "small muted", style: "margin:0" }, t("no_drivers")));
+}
+
+// 常用原因：点一下填进输入框
+function reasonChips(target, keys) {
+  return h("div", { class: "row", style: "gap:8px" }, h("span", { class: "tiny muted" }, t("quick_reasons")),
+    keys.map((k) => h("button", { type: "button", class: "chip-btn", onclick: () => { target.value = t(k); target.focus(); } }, t(k))));
+}
+
+// 拍签收照片后直接确认送达
+async function deliverWithPhoto(orderId, file, btn) {
+  try {
+    if (btn) { btn.classList.add("busy"); btn.setAttribute("aria-busy", "true"); }
+    toast(t("uploading"));
+    await uploadPhoto(orderId, "signoff", file);
+    await rpc("confirm_delivered", { p_order: orderId, p_via: null });
+    toast(t("delivered_toast"));
+  } catch (e) { toast(errText(e)); }
+  route();
+}
+function photoDeliverButton(d, primary = true) {
+  const lbl = h("label", { class: `btn big ${primary ? "primary" : ""}`, "data-action": "photo-deliver" }, icon(I.cam, 22), t("photo_deliver"));
+  lbl.append(pickPhotos((fs) => deliverWithPhoto(d.id, fs[0], lbl), { capture: true, multiple: false }));
+  return lbl;
+}
+
+// 司机首页的卡片：不用点进去就能导航、出发、拍照送达
+function driverCard(o) {
+  const items = itemsText(o.order_items);
+  const tel = ((o.contact || "").match(/[+\d][\d\s()-]{6,}/) || [])[0];
+  const act = [];
+  if (o.address) act.push(h("a", { class: "btn", target: "_blank", rel: "noopener", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}` }, t("navigate")));
+  if (tel) act.push(h("a", { class: "btn", href: `tel:${tel.replace(/[^\d+]/g, "")}` }, t("call")));
+  if (o.status === "assigned") act.push(h("button", { class: "btn primary", type: "button", "data-action": "start", onclick: async (e) => {
+    e.currentTarget.disabled = true;
+    try { await rpc("start_delivery", { p_order: o.id, p_via: null }); toast(t("started_toast")); } catch (ex) { toast(errText(ex)); }
+    route();
+  } }, t("go")));
+  if (o.status === "delivering") act.push(photoDeliverButton(o));
+  return h("div", { class: "ocard" },
+    h("div", { class: "meta" }, h("span", {}, `#${o.id}`), statusChip(o)),
+    h("a", { href: `#/order/${o.id}`, class: "cust", style: "color:var(--text);text-decoration:none;font-size:17px" }, o.customer, " ›"),
+    o.address ? h("div", {}, o.address) : null,
+    h("div", { class: "items" }, items.map((x) => h("div", {}, x))),
+    h("div", { class: "row", style: "gap:6px" }, flagChips(o), o.due_date ? h("span", { class: "tiny muted" }, t("due_on", { d: o.due_date })) : null),
+    o.note ? h("div", { class: "info small" }, t("note_is", { n: o.note })) : null,
+    act.length ? h("div", { class: "card-actions" }, act) : null);
 }
 
 // ------------------------------------------------------------------ 司机送货单
@@ -452,11 +507,10 @@ function driverView(d, urls) {
   if (d.status === "assigned") dock.append(h("button", { class: "btn primary big", type: "button", "data-action": "start",
     onclick: act(() => rpc("start_delivery", { p_order: d.id, p_via: null }), t("started_toast")) }, t("start_delivery")));
   if (active) {
-    dock.append(h("label", { class: `btn big ${d.status === "delivering" ? "primary" : ""}`, "data-action": "signoff" }, icon(I.cam, 22),
-      signoffs.length ? t("take_signoff_again") : t("take_signoff"),
-      pickPhotos(async (fs) => { try { for (const f of fs) await uploadPhoto(d.id, "signoff", f); toast(t("signoff_uploaded")); route(); } catch (e) { toast(errText(e)); } }, { capture: true, multiple: false })));
+    // 已经有签收照片（比如 Agent 传的）就直接确认；否则拍照即送达
     if (signoffs.length) dock.append(h("button", { class: "btn primary big", type: "button", "data-action": "delivered",
       onclick: act(() => rpc("confirm_delivered", { p_order: d.id, p_via: null }), t("delivered_toast")) }, icon(I.check, 22), t("confirm_delivered")));
+    else dock.append(photoDeliverButton(d, d.status === "delivering"));
     dock.append(h("div", { class: "grid2" },
       h("a", { href: `#/order/${d.id}/edit`, class: "btn", "data-action": "edit" }, t("edit_items")),
       h("button", { class: "btn", type: "button", "data-action": "issue", onclick: () => issueDialog(d) }, t("report_issue"))));
@@ -485,6 +539,7 @@ function driverView(d, urls) {
     signoffs.length ? h("section", { class: "card" }, h("h2", { class: "small muted" }, t("signoff_photos")),
       h("div", { class: "photos" }, signoffs.map((p) => h("img", { class: "photo", src: urls[p.path] || "", alt: t("signoff_photos") })))) : null,
     d.status === "delivered" ? h("div", { class: "info", "data-state": "delivered" }, t("delivered_at", { t: fmtTime(d.delivered_at) })) : null,
+    d.status === "cancelled" ? h("div", { class: "err", "data-state": "cancelled" }, t("cancelled_info", { t: fmtFull(d.cancelled_at), r: d.cancel_reason })) : null,
     dock));
 }
 function issueDialog(d) {
@@ -492,10 +547,21 @@ function issueDialog(d) {
   shell(h("div", { class: "narrow stack" }, backLink(`#/order/${d.id}`, t("back_to_delivery")),
     h("h1", { style: "font-size:20px" }, t("issue_page_title", { id: d.id })),
     h("label", { class: "f", for: "issue" }, t("issue_question"), ta),
+    reasonChips(ta, ["r_not_home", "r_wrong_address", "r_refused", "r_damaged"]),
     h("button", { class: "btn primary big", type: "button", onclick: async () => {
       try { await rpc("report_issue", { p_order: d.id, p_note: ta.value, p_via: null }); toast(t("issue_sent")); location.hash = `#/order/${d.id}`; route(); }
       catch (e) { toast(errText(e)); }
     } }, t("send"))));
+}
+
+// 数量加减：手机上不用弹键盘
+function stepper(i) {
+  const inp = h("input", { class: "i qtyin", id: `q${i.id}`, type: "number", inputmode: "decimal", min: "0", step: "any", value: i.newQty, disabled: i.remove, oninput: (e) => (i.newQty = e.target.value) });
+  const bump = (dlt) => () => { const v = Math.max(0, (Number(inp.value) || 0) + dlt); inp.value = String(v); i.newQty = String(v); };
+  return h("span", { class: "stepper" },
+    h("button", { type: "button", class: "iconbtn", "aria-label": t("decrease"), disabled: i.remove, onclick: bump(-1) }, "−"),
+    inp,
+    h("button", { type: "button", class: "iconbtn", "aria-label": t("increase"), disabled: i.remove, onclick: bump(1) }, "+"));
 }
 
 // ------------------------------------------------------------------ 修改订单
@@ -515,7 +581,7 @@ async function editView(id) {
     ...items.map((i) => h("div", { class: "row", style: `justify-content:space-between;${i.remove ? "opacity:.5" : ""}` },
       h("span", { style: "flex:1 1 160px" }, `${catLabel(i.category)}${i.spec ? " · " + i.spec : ""}`),
       h("label", { class: "sr", for: `q${i.id}` }, t("qty")),
-      h("input", { class: "i qtyin", id: `q${i.id}`, type: "number", inputmode: "decimal", min: "0", step: "any", value: i.newQty, disabled: i.remove, oninput: (e) => (i.newQty = e.target.value) }),
+      stepper(i),
       h("span", { class: "muted", style: "min-width:24px" }, i.unit),
       h("button", { type: "button", class: "btn link danger", onclick: () => { i.remove = !i.remove; drawItems(); } }, i.remove ? t("restore") : t("delete")))),
     adds.length ? h("div", { class: "small muted" }, t("new_items")) : null,
@@ -552,8 +618,33 @@ async function editView(id) {
     h("section", { class: "card" }, h("h2", {}, t("items")), itemRows),
     isDriver ? null : h("section", { class: "card" }, h("h2", {}, t("delivery_info")),
       Object.values(fieldInputs).map((el) => h("label", { class: "f" }, el.dataset.label, el))),
-    h("section", { class: "card" }, h("label", { class: "f", for: "reason" }, me.role === "sales" ? t("reason_optional") : t("reason_required"), reason)),
+    h("section", { class: "card" }, h("label", { class: "f", for: "reason" }, me.role === "sales" ? t("reason_optional") : t("reason_required"), reason),
+      me.role === "driver" ? reasonChips(reason, ["r_customer_less", "r_customer_more", "r_out_of_stock", "r_damaged"])
+        : me.role === "company" ? reasonChips(reason, ["r_out_of_stock", "r_customer_request", "r_entry_error"]) : null),
     err, h("div", { class: "dock" }, save)));
+}
+
+// ------------------------------------------------------------------ 取消订单（公司）
+async function cancelView(id) {
+  const d = await rpc("order_detail", { p_order: id, p_lang: getLang() });
+  if (!d || me.role !== "company") { location.hash = "#/"; return; }
+  const ta = h("textarea", { class: "i", id: "creason" });
+  const err = h("div", { class: "err", role: "alert", hidden: true });
+  shell(h("div", { class: "narrow stack" }, backLink(`#/order/${id}`, t("keep_order")),
+    h("h1", { style: "font-size:20px" }, t("cancel_title", { id })),
+    h("div", { class: "card" }, h("strong", {}, d.customer), h("div", { class: "small muted" }, itemsText(d.items).join("、"))),
+    h("div", { class: "note" }, t("cancel_notice")),
+    h("label", { class: "f", for: "creason" }, t("cancel_reason"), ta),
+    reasonChips(ta, ["r_not_wanted", "r_duplicate", "r_out_of_stock", "r_reschedule"]),
+    err,
+    h("button", { class: "btn primary big", type: "button", "data-action": "confirm-cancel", style: "background:var(--bad);border-color:var(--bad)", onclick: async (e) => {
+      const btn = e.currentTarget;
+      err.hidden = true;
+      if (!ta.value.trim()) { err.textContent = errText({ hint: "cancel_reason_required" }); err.hidden = false; return; }
+      btn.disabled = true;
+      try { await rpc("cancel_order", { p_order: id, p_reason: ta.value.trim(), p_via: null }); toast(t("cancelled_toast")); location.hash = `#/order/${id}`; }
+      catch (ex) { err.textContent = errText(ex); err.hidden = false; btn.disabled = false; }
+    } }, t("confirm_cancel"))));
 }
 
 // ------------------------------------------------------------------ 通知
@@ -659,6 +750,7 @@ async function route() {
     let m;
     if (hash === "#/new") newOrderView();
     else if ((m = hash.match(/^#\/order\/(\d+)\/edit$/))) await editView(Number(m[1]));
+    else if ((m = hash.match(/^#\/order\/(\d+)\/cancel$/))) await cancelView(Number(m[1]));
     else if ((m = hash.match(/^#\/order\/(\d+)$/))) await orderView(Number(m[1]));
     else if (hash === "#/notifications") await notificationsView();
     else if (hash === "#/settings") await settingsView();

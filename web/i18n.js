@@ -233,6 +233,40 @@ const D = {
   no_email_hint: ["没有邮箱的人（如司机）可以用自定的登录名，比如 wang01。", "People without email (e.g. drivers) can use a username like wang01.", "Quien no tenga correo (p. ej. conductores) puede usar un usuario como juan01."],
   add: ["添加", "Add", "Agregar"],
   user_lang: ["语言", "Language", "Idioma"],
+  // 取消订单
+  st_cancelled: ["已取消", "Cancelled", "Cancelado"],
+  f_cancelled: ["已取消的", "Cancelled", "Cancelados"],
+  cancel_order: ["取消订单", "Cancel order", "Cancelar pedido"],
+  cancel_title: ["取消订单 #{id}", "Cancel order #{id}", "Cancelar pedido #{id}"],
+  cancel_notice: ["取消后订单会保留在系统里，标为已取消，之后不能再改。这张单的销售和司机会收到通知。", "The order stays in the system marked as cancelled and can no longer be changed. The sales rep and driver will be notified.", "El pedido queda en el sistema como cancelado y ya no se puede modificar. Se avisará al vendedor y al conductor."],
+  cancel_reason: ["取消原因 *", "Reason for cancelling *", "Motivo de la cancelación *"],
+  confirm_cancel: ["确认取消订单", "Cancel this order", "Cancelar este pedido"],
+  keep_order: ["不取消，返回", "Keep the order", "No cancelar"],
+  cancelled_toast: ["订单已取消，销售和司机会收到通知", "Order cancelled. The sales rep and driver will be notified.", "Pedido cancelado. Se avisará al vendedor y al conductor."],
+  cancelled_info: ["已于 {t} 取消。原因：{r}", "Cancelled {t}. Reason: {r}", "Cancelado {t}. Motivo: {r}"],
+  ts_cancelled: ["取消 {t}", "Cancelled {t}", "Cancelado {t}"],
+  recent_done: ["最近结束的", "Recently closed", "Cerrados recientemente"],
+  // 常用原因（点一下就填上）
+  quick_reasons: ["常用原因", "Common reasons", "Motivos comunes"],
+  r_customer_less: ["客户少要了", "Customer took fewer", "El cliente recibió menos"],
+  r_customer_more: ["客户多要了", "Customer wanted more", "El cliente pidió más"],
+  r_out_of_stock: ["缺货", "Out of stock", "Sin existencias"],
+  r_damaged: ["货物破损", "Damaged goods", "Mercancía dañada"],
+  r_not_home: ["客户不在", "Customer not there", "Cliente ausente"],
+  r_wrong_address: ["地址不对", "Wrong address", "Dirección incorrecta"],
+  r_refused: ["客户拒收", "Customer refused delivery", "El cliente rechazó la entrega"],
+  r_customer_request: ["客户要求", "Customer request", "Solicitud del cliente"],
+  r_entry_error: ["填错了", "Entry error", "Error de captura"],
+  r_not_wanted: ["客户不要了", "Customer no longer wants it", "El cliente ya no lo quiere"],
+  r_duplicate: ["重复下单", "Duplicate order", "Pedido duplicado"],
+  r_reschedule: ["客户改期", "Customer rescheduled", "El cliente cambió la fecha"],
+  // 司机快捷操作
+  go: ["出发", "Start", "Salir"],
+  photo_deliver: ["拍照确认送达", "Photo & confirm delivery", "Foto y confirmar entrega"],
+  uploading: ["正在上传照片…", "Uploading photo…", "Subiendo foto…"],
+  decrease: ["减少", "Decrease", "Disminuir"],
+  increase: ["增加", "Increase", "Aumentar"],
+  details: ["详情", "Details", "Detalles"],
 };
 
 const IDX = { zh: 0, en: 1, es: 2 };
@@ -284,6 +318,10 @@ const E = {
   photo_not_allowed: ["无权为订单 #{id} 上传这类照片", "You cannot upload this kind of photo for order #{id}", "No puedes subir este tipo de foto para el pedido #{id}"],
   admin_exists: ["系统已经有管理员了，请找管理员开通账号", "An admin already exists. Ask the admin for an account.", "Ya existe un administrador. Pídele una cuenta."],
   name_required: ["请填写姓名", "Name is required", "El nombre es obligatorio"],
+  order_cancelled: ["订单 #{id} 已取消，不能再操作", "Order #{id} was cancelled and can no longer be changed", "El pedido #{id} fue cancelado y ya no se puede modificar"],
+  company_only_cancel: ["只有公司可以取消订单", "Only the company can cancel orders", "Solo la empresa puede cancelar pedidos"],
+  cannot_cancel_delivered: ["已送达的订单不能取消", "Delivered orders cannot be cancelled", "Los pedidos entregados no se pueden cancelar"],
+  cancel_reason_required: ["取消订单必须填写原因", "A reason is required to cancel an order", "Se requiere un motivo para cancelar el pedido"],
   bad_lang: ["语言只能是 zh、en 或 es", "Language must be zh, en or es", "El idioma debe ser zh, en o es"],
 };
 export function errText(e) {

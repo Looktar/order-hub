@@ -74,6 +74,7 @@ Cada notificación tiene `type`, `order_id` y una frase `summary` en el idioma d
 | delivered | Entregado | Empresa + el vendedor de ese pedido |
 | issue | El conductor reportó un problema de entrega | Empresa + el vendedor de ese pedido |
 | issue_resolved | La empresa resolvió el problema | El vendedor de ese pedido + el conductor |
+| cancelled | La empresa canceló el pedido | El vendedor de ese pedido + el conductor (si ya estaba asignado) |
 
 Nunca recibes notificaciones de tus propias acciones.
 
@@ -88,10 +89,10 @@ curl -s "$API/orders/12" -H "Authorization: Bearer $TOKEN"
 curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 ```
 
-Estados: `pending` (pendiente de la empresa) → `assigned` (asignado a un conductor) → `delivering` (en reparto) → `delivered` (entregado).
+Estados: `pending` (pendiente de la empresa) → `assigned` (asignado a un conductor) → `delivering` (en reparto) → `delivered` (entregado). La empresa también puede cancelar un pedido no entregado: el estado pasa a `cancelled` y `cancel_reason` guarda el motivo. Después ya no se puede hacer nada con ese pedido.
 `modified_by` tiene valor cuando la empresa o el conductor modificaron el pedido; `has_issue` es true cuando hay un problema de entrega.
 En cada artículo, `original_qty` es lo que el vendedor escribió al principio y `qty` es la cantidad actual.
-Fechas (UTC, formato ISO): `created_at` pedido, `assigned_at` asignado, `started_at` salida del conductor, `delivered_at` entregado, `updated_at` último cambio.
+Fechas (UTC, formato ISO): `created_at` pedido, `assigned_at` asignado, `started_at` salida del conductor, `delivered_at` entregado, `cancelled_at` cancelado, `updated_at` último cambio.
 
 ## 6. Agente del vendedor
 
@@ -137,6 +138,9 @@ curl -s "$API/drivers" -H "Authorization: Bearer $TOKEN"
 curl -s -X POST "$API/orders/13/assign" -H "Authorization: Bearer $TOKEN" -H "X-Agent-Name: Codex" \
   -H "Content-Type: application/json" -d '{"driver_name": "Juan"}'
 # modificar un pedido (motivo obligatorio): ver la sección 9
+# cancelar un pedido (motivo obligatorio; los entregados no se pueden cancelar)
+curl -s -X POST "$API/orders/13/cancel" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"reason": "el cliente ya no lo quiere"}'
 # cuando se resuelva un problema de entrega
 curl -s -X POST "$API/orders/13/issue/resolve" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"note": "se reprogramó para mañana"}'

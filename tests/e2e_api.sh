@@ -128,6 +128,22 @@ expect "订单 1 已送达" "delivered" "$(call "$SA" GET /orders/$O1 | jq -r .s
 expect "销售甲收到已送达通知" "1" "$(call "$SA" GET /notifications | jq '[.[] | select(.type=="delivered")] | length')"
 expect "已送达后不能再改" "400" "$(code "$C1" POST /orders/$O1/changes "{\"reason\":\"x\",\"items\":[{\"id\":$ITEM_OIL,\"qty\":1}]}")"
 
+# ---------- 取消订单 ----------
+AGENT=公司Agent
+O3=$(call "$SB" POST /orders '{"customer":"要取消的客户","items":[{"category":"oil","qty":2,"unit":"箱"}]}' | jq -r .id)
+call "$C1" POST /orders/$O3/assign '{"driver_name":"司机老李"}' > /dev/null
+call "$SB" POST /notifications/read '{}' > /dev/null; call "$D2" POST /notifications/read '{}' > /dev/null
+expect "司机不能取消订单" "403" "$(code "$D2" POST /orders/$O3/cancel '{"reason":"x"}')"
+expect "取消不写原因被拒" "400" "$(code "$C1" POST /orders/$O3/cancel '{}')"
+call "$C1" POST /orders/$O3/cancel '{"reason":"客户不要了"}' > /dev/null
+expect "订单变为已取消" "cancelled" "$(call "$SB" GET /orders/$O3 | jq -r .status)"
+expect "销售收到取消通知" "1" "$(call "$SB" GET /notifications | jq '[.[] | select(.type=="cancelled")] | length')"
+expect "司机收到取消通知" "1" "$(call "$D2" GET /notifications | jq '[.[] | select(.type=="cancelled")] | length')"
+expect "销售甲收不到别人订单的取消通知" "0" "$(call "$SA" GET /notifications | jq '[.[] | select(.type=="cancelled")] | length')"
+expect "取消后司机不能出发" "400" "$(code "$D2" POST /orders/$O3/start)"
+expect "取消后的报错代码" "order_cancelled" "$(call "$D2" POST /orders/$O3/start | jq -r .code)"
+expect "已送达的订单不能取消" "400" "$(code "$C1" POST /orders/$O1/cancel '{"reason":"x"}')"
+
 # ---------- 令牌作废 ----------
 U_D1=$(call "$BOSS" GET /admin/users | jq -r '.[] | select(.login=="wang01") | .id')
 call "$BOSS" POST /admin/users/$U_D1/tokens/reset > /dev/null

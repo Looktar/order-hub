@@ -72,6 +72,7 @@ curl -s -X POST "$API/notifications/read" -H "Authorization: Bearer $TOKEN" \
 | delivered | 已送达 | 公司 + 该单销售 |
 | issue | 司机报告送货问题 | 公司 + 该单销售 |
 | issue_resolved | 公司处理完送货问题 | 该单销售 + 司机 |
+| cancelled | 公司取消了订单 | 该单销售 + 司机（已派单时） |
 
 自己的操作不会通知自己。
 
@@ -86,10 +87,10 @@ curl -s "$API/orders/12" -H "Authorization: Bearer $TOKEN"
 curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 ```
 
-订单状态：`pending` 待公司处理 → `assigned` 已派给司机 → `delivering` 送货中 → `delivered` 已送达。
+订单状态：`pending` 待公司处理 → `assigned` 已派给司机 → `delivering` 送货中 → `delivered` 已送达。公司也可以把没送达的订单取消，状态变成 `cancelled`（已取消），`cancel_reason` 是原因；已取消的订单不能再做任何操作。
 `modified_by` 不为空表示订单被公司或司机改过；`has_issue` 为 true 表示有送货问题。
 货品里的 `original_qty` 是销售最初填的数量，`qty` 是当前数量。
-时间（UTC，ISO 格式）：`created_at` 下单、`assigned_at` 派单、`started_at` 司机出发、`delivered_at` 送达、`updated_at` 最近一次变动。
+时间（UTC，ISO 格式）：`created_at` 下单、`assigned_at` 派单、`started_at` 司机出发、`delivered_at` 送达、`cancelled_at` 取消、`updated_at` 最近一次变动。
 
 ## 6. 销售的 Agent
 
@@ -135,6 +136,9 @@ curl -s "$API/drivers" -H "Authorization: Bearer $TOKEN"
 curl -s -X POST "$API/orders/13/assign" -H "Authorization: Bearer $TOKEN" -H "X-Agent-Name: Codex" \
   -H "Content-Type: application/json" -d '{"driver_name": "老王"}'
 # 修改订单（必须写原因），写法见第 9 节
+# 取消订单（必须写原因；已送达的不能取消）
+curl -s -X POST "$API/orders/13/cancel" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"reason": "客户不要了"}'
 # 送货问题处理完后
 curl -s -X POST "$API/orders/13/issue/resolve" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"note": "已改约明天送"}'

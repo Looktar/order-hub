@@ -175,6 +175,20 @@ await step("提交完整订单", async () => {
   ok("执行状态里显示下单的具体时间", (await page.locator("ol.steps time").count()) >= 1);
   await shot(page, "订单详情");
 }, page);
+let cancelOrder = 0;
+await step("再下一张单（后面公司会取消）", async () => {
+  await page.goto(WEB + "#/new");
+  await page.waitForSelector("h1:has-text('新建订单')");
+  await page.locator("input[type=number]").first().fill("3");
+  await page.getByLabel("客户 *").fill("要取消的汽修");
+  await page.getByLabel("送货地址").fill("1 Cancel St, Markham");
+  await page.click("button:has-text('发回公司')");
+  await page.waitForURL(/#\/order\/\d+$/, { timeout: 20000 });
+  cancelOrder = orderIdFromUrl(page);
+  ok("第二张单提交成功", cancelOrder > 0);
+  await page.goto(WEB + `#/order/${newOrder}`);
+  await page.waitForSelector("text=货品清单");
+}, page);
 await step("公司处理前销售自己改单", async () => {
   await page.click("a:has-text('修改订单')");
   await page.waitForSelector("text=修改原因");
@@ -222,6 +236,16 @@ await step("派单与改派", async () => {
   ok("执行状态里有派单时间", (await page.locator("ol.steps time").count()) >= 2);
   await shot(page, "派单后详情");
 }, page);
+await step("第二张单派给老王", async () => {
+  await page.goto(WEB + `#/order/${cancelOrder}`);
+  await page.waitForSelector("#drv");
+  await page.selectOption("#drv", { label: "司机老王" });
+  await page.click("button[data-action=assign]");
+  await page.waitForSelector("text=改派司机");
+  ok("第二张单已派给老王", true);
+  await page.goto(WEB + `#/order/${newOrder}`);
+  await page.waitForSelector("text=修改与通知记录");
+}, page);
 await step("公司改单", async () => {
   await page.click("a:has-text('修改订单')");
   await page.waitForSelector("text=修改原因");
@@ -264,8 +288,19 @@ await step("被改派的司机", async () => {
 await ctx.close();
 
 ({ ctx, page } = await open(PHONE, "wang01", "pass-wang01"));
-await step("送货单", async () => {
+await step("在列表上直接出发", async () => {
+  const card = page.locator(".ocard", { hasText: "要取消的汽修" });
+  ok("列表卡片上有导航按钮", (await card.locator("a:has-text('导航')").count()) === 1);
   await shot(page, "我的送货单");
+  await card.locator("button[data-action=start]").click();
+  await page.waitForTimeout(1500);
+  const card2 = page.locator(".ocard", { hasText: "要取消的汽修" });
+  ok("列表上点出发后，卡片变成送货中", /送货中/.test(await card2.innerText()));
+  ok("送货中的卡片上直接有“拍照确认送达”", (await card2.locator("[data-action=photo-deliver]").count()) === 1);
+  ok("送货中的排在最前面", /要取消的汽修/.test(await page.locator(".ocard").first().innerText()));
+  await shot(page, "列表上出发后");
+}, page);
+await step("送货单", async () => {
   await page.click(`a[href='#/order/${newOrder}']`);
   await page.waitForSelector("button[data-action=start]");
   const body = await text(page);
@@ -283,13 +318,16 @@ await step("现场改单", async () => {
   await page.click("a[data-action=edit]");
   await page.waitForSelector("text=修改原因");
   ok("司机改单页面没有送货信息可改", (await page.locator("label:has-text('送货地址')").count()) === 0);
-  await page.locator("input.qtyin").first().fill("9");
+  for (let k = 0; k < 3; k++) await page.locator(".stepper button[aria-label='减少']").first().click();
+  ok("用减号把 12 减到 9", (await page.locator("input.qtyin").first().inputValue()) === "9");
   await page.click("button:has-text('保存修改')");
   ok("司机不写原因会提示", /原因/.test(await page.locator(".err").innerText()));
+  await page.click(".chip-btn:has-text('客户少要了')");
+  ok("点常用原因会填进原因框", (await page.inputValue("#reason")) === "客户少要了");
   await page.click("button:has-text('加一项货品')");
   await page.locator(".card select").last().selectOption("rim");
   await page.locator(".card input[type=number]").last().fill("4");
-  await page.fill("#reason", "客户只要 9 箱，另加 4 个轮毂");
+  await page.fill("#reason", "客户少要了，另加 4 个轮毂");
   await shot(page, "现场改单");
   await page.click("button:has-text('保存修改')");
   await page.waitForURL(/#\/order\/\d+$/);
@@ -303,18 +341,16 @@ await step("报告问题", async () => {
   await page.click("button[data-action=issue]");
   await page.waitForSelector("#issue");
   ok("问题不写内容会提示", (await clickForToast(page, page.locator("button:has-text('发送')"))).length > 0);
-  await page.fill("#issue", "客户中午不在，下午再送");
+  await page.click(".chip-btn:has-text('客户不在')");
   await page.click("button:has-text('发送')");
   await page.waitForSelector("text=已报告问题");
   await shot(page, "报告问题后");
 }, page);
 await step("签收与送达", async () => {
-  ok("没拍签收照片时没有“确认送达”按钮", (await page.locator("button[data-action=delivered]").count()) === 0);
-  await page.setInputFiles("label[data-action=signoff] input[type=file]", PHOTO);
-  await page.waitForSelector("button[data-action=delivered]", { timeout: 15000 });
-  await shot(page, "签收照片后");
-  await page.click("button[data-action=delivered]");
-  await page.waitForSelector("[data-state=delivered]");
+  ok("没拍签收照片时没有单独的“确认送达”按钮", (await page.locator("button[data-action=delivered]").count()) === 0);
+  await page.setInputFiles("label[data-action=photo-deliver] input[type=file]", PHOTO);
+  await page.waitForSelector("[data-state=delivered]", { timeout: 20000 });
+  ok("拍完签收照片直接送达，不用再点确认", true);
   ok("送达后显示送达时间", /送达/.test(await text(page)));
   ok("送达后不再显示操作按钮", (await page.locator("[data-action]").count()) === 0);
   await shot(page, "已送达");
@@ -346,6 +382,44 @@ await step("处理送货问题", async () => {
 }, page);
 await ctx.close();
 
+role = "公司";
+({ ctx, page } = await open(DESK, "office2", "pass-office2"));
+await step("取消订单", async () => {
+  await page.goto(WEB + `#/order/${cancelOrder}`);
+  await page.click("a[data-action=cancel]");
+  await page.waitForSelector("button[data-action=confirm-cancel]");
+  await page.click("button[data-action=confirm-cancel]");
+  ok("不写原因不能取消", /原因/.test(await page.locator(".err").innerText()));
+  await page.click(".chip-btn:has-text('客户不要了')");
+  await shot(page, "取消订单");
+  await page.click("button[data-action=confirm-cancel]");
+  await page.waitForSelector("[data-state=cancelled]");
+  const body = await text(page);
+  ok("取消后显示取消时间和原因", /已于[\s\S]*取消[\s\S]*客户不要了/.test(body));
+  ok("取消后不再显示修改、派单、取消按钮", (await page.locator("a:has-text('修改订单'), #drv, a[data-action=cancel]").count()) === 0);
+  await shot(page, "取消后详情");
+  await page.goto(WEB + "#/");
+  await page.waitForSelector(".board");
+  ok("已取消的单不在看板的四栏里", !/要取消的汽修/.test(await page.locator(".board").innerText()));
+  await page.click(".filters button:has-text('已取消的')");
+  ok("“已取消的”筛选里能看到", /要取消的汽修/.test(await page.locator(".board").innerText()));
+  await shot(page, "筛选-已取消");
+}, page);
+await ctx.close();
+
+role = "司机";
+({ ctx, page } = await open(PHONE, "wang01", "pass-wang01"));
+await step("订单被取消", async () => {
+  await page.click("a[href='#/notifications']");
+  await page.waitForSelector(".notice");
+  ok("司机收到取消通知", /取消/.test(await text(page)));
+  await page.goto(WEB + `#/order/${cancelOrder}`);
+  await page.waitForSelector("[data-state=cancelled]");
+  ok("被取消的送货单上没有任何操作按钮", (await page.locator("[data-action]").count()) === 0);
+  await shot(page, "被取消的送货单");
+}, page);
+await ctx.close();
+
 role = "销售";
 ({ ctx, page } = await open(PHONE, "sales-a", "pass-sales-a"));
 await step("看通知和最终结果", async () => {
@@ -356,6 +430,7 @@ await step("看通知和最终结果", async () => {
   ok("收到司机改单通知", /被司机/.test(body));
   ok("收到送货问题通知", /送货有问题/.test(body));
   ok("收到已送达通知", /已送达/.test(body));
+  ok("收到取消通知", /已被公司[\s\S]*取消/.test(body));
   ok("没有收到“已改派”这种司机才需要的通知", !/改派给其他司机/.test(body));
   await shot(page, "通知");
   await page.goto(WEB + `#/order/${newOrder}`);

@@ -198,6 +198,35 @@ select t.ok((public.order_detail(1) ? 'started_at') and (public.order_detail(1) 
 update public.orders set created_at = now() + interval '1 day' where id = 1;
 select t.ok((select created_at < now() from public.orders where id = 1), '下单时间不能被改');
 
+-- 取消订单
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-00000000a001');
+select t.fails($$select public.cancel_order(1, '不要了')$$, '销售不能取消订单');
+select t.as_user('00000000-0000-0000-0000-00000000d002');
+select t.fails($$select public.cancel_order(2, '不要了')$$, '司机不能取消订单');
+select t.as_user('00000000-0000-0000-0000-00000000c001');
+select t.fails($$select public.cancel_order(1, '不要了')$$, '已送达的订单不能取消');
+select t.fails($$select public.cancel_order(2, '  ')$$, '取消必须写原因');
+reset role; update public.event_recipients set read_at = now(); set role authenticated;
+select t.as_user('00000000-0000-0000-0000-00000000c001');
+select public.cancel_order(2, '客户改主意了', '公司Agent');
+reset role;
+select t.ok((select status = 'cancelled' and cancelled_at is not null and cancel_reason = '客户改主意了' from public.orders where id = 2), '公司取消订单 #2，记下了时间和原因');
+select t.ok((select array_agg(p.name order by p.name) from public.event_recipients r join public.events e on e.id = r.event_id
+               join public.profiles p on p.id = r.user_id where e.type = 'cancelled' and e.order_id = 2)
+            = array['司机二', '销售乙'], '取消通知只发给该单销售和司机');
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-00000000d002');
+select t.ok((public.order_detail(2)->>'status') = 'cancelled', '司机还能看到这张单，状态是已取消');
+select t.fails($$select public.start_delivery(2)$$, '取消后司机不能出发');
+select t.fails($$select public.modify_order(2, '{"items":[{"id":3,"qty":1}]}', 'x')$$, '取消后司机不能改单');
+select t.fails($$select public.report_issue(2, 'x')$$, '取消后不能报告问题');
+select t.as_user('00000000-0000-0000-0000-00000000c001');
+select t.fails($$select public.modify_order(2, '{"fields":{"note":"x"}}', 'x')$$, '取消后公司也不能改单');
+select t.fails($$select public.assign_driver(2, '00000000-0000-0000-0000-00000000d001')$$, '取消后不能再派单');
+select t.fails($$select public.cancel_order(2, '再取消一次')$$, '不能重复取消');
+reset role;
+
 -- 多语言
 reset role;
 select t.ok((select count(*) from public.events where summary_i18n ?& array['zh', 'en', 'es']) = (select count(*) from public.events), '每条通知都有中英西三种语言');

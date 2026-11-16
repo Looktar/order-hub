@@ -102,10 +102,8 @@ await page.fill("#reason", "客户现场只收 4 箱");
 await shot(page, "司机-现场修改数量");
 await page.click("button:has-text('保存修改')");
 await page.waitForSelector("text=司机改过这张单");
-await page.setInputFiles("label:has-text('拍签收照片') input[type=file]", PHOTO);
-await page.waitForSelector("button:has-text('确认送达')");
-await page.click("button:has-text('确认送达')");
-await page.waitForSelector("text=送达", { timeout: 10000 });
+await page.setInputFiles("label[data-action=photo-deliver] input[type=file]", PHOTO);
+await page.waitForSelector("[data-state=delivered]", { timeout: 15000 });
 await shot(page, "司机-已送达");
 await ctx.close();
 

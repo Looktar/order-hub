@@ -116,3 +116,17 @@ ol.steps li { display: flex; align-items: center; gap: 10px; }
 
 .code { padding: 12px 14px; border-radius: 8px; background: #18212B; color: #F4F5F7; font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; overflow-x: auto; white-space: pre; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 20; max-width: 90vw; padding: 12px 18px; border-radius: 10px; background: #18212B; color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.2); }
+
+/* 常用原因按钮 */
+.chip-btn { min-height: 40px; padding: 0 14px; border: 1px solid var(--field); border-radius: 20px; background: var(--card); color: var(--text); font-size: 14px; cursor: pointer; }
+.chip-btn:active { background: var(--blue-bg); }
+/* 数量加减 */
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper .iconbtn { width: 44px; font-size: 20px; font-weight: 700; }
+.stepper .qtyin { width: 72px; text-align: center; }
+/* 司机卡片上的按钮 */
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.card-actions > * { flex: 1 1 auto; }
+.card-actions .btn.big { min-height: 48px; font-size: 15px; width: auto; }
+.btn.busy { opacity: .6; pointer-events: none; }
+.btn.danger { color: var(--bad); border-color: #E7B4B4; }

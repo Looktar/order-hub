@@ -74,6 +74,7 @@ Each notification has `type`, `order_id` and a one-sentence `summary` in the use
 | delivered | Delivered | Company + that order's sales rep |
 | issue | The driver reported a delivery problem | Company + that order's sales rep |
 | issue_resolved | The company resolved the problem | That order's sales rep + driver |
+| cancelled | The company cancelled the order | That order's sales rep + driver (if assigned) |
 
 You are never notified about your own actions.
 
@@ -88,10 +89,10 @@ curl -s "$API/orders/12" -H "Authorization: Bearer $TOKEN"
 curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 ```
 
-Statuses: `pending` (waiting for the company) → `assigned` (assigned to a driver) → `delivering` (out for delivery) → `delivered`.
+Statuses: `pending` (waiting for the company) → `assigned` (assigned to a driver) → `delivering` (out for delivery) → `delivered`. The company can also cancel an undelivered order: its status becomes `cancelled` and `cancel_reason` holds the reason. Nothing can be done to a cancelled order after that.
 `modified_by` is set when the company or the driver changed the order; `has_issue` is true when there is a delivery problem.
 For each item, `original_qty` is what the sales rep first entered and `qty` is the current quantity.
-Timestamps (UTC, ISO format): `created_at` ordered, `assigned_at` assigned, `started_at` driver left, `delivered_at` delivered, `updated_at` last change.
+Timestamps (UTC, ISO format): `created_at` ordered, `assigned_at` assigned, `started_at` driver left, `delivered_at` delivered, `cancelled_at` cancelled, `updated_at` last change.
 
 ## 6. Sales rep's agent
 
@@ -137,6 +138,9 @@ curl -s "$API/drivers" -H "Authorization: Bearer $TOKEN"
 curl -s -X POST "$API/orders/13/assign" -H "Authorization: Bearer $TOKEN" -H "X-Agent-Name: Codex" \
   -H "Content-Type: application/json" -d '{"driver_name": "Juan"}'
 # change an order (reason required): see section 9
+# cancel an order (reason required; delivered orders can't be cancelled)
+curl -s -X POST "$API/orders/13/cancel" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"reason": "customer no longer wants it"}'
 # after a delivery problem is sorted out
 curl -s -X POST "$API/orders/13/issue/resolve" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"note": "rescheduled for tomorrow"}'
