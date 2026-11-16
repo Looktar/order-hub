@@ -18,9 +18,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: 安装 Supabase 命令行
+        run: curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin supabase && supabase --version
       - name: 启动本地 Supabase
         run: |
           supabase start -x studio,imgproxy,postgres-meta,vector,logflare,realtime

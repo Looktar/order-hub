@@ -65,9 +65,8 @@ jobs:
             echo "::error::仓库的 Actions Secrets 里找不到 SUPABASE_ACCESS_TOKEN（可能填到了 Environments、Codespaces 或 Dependabot 下面，或者名字有误）。"
           fi
           exit 1
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: 安装 Supabase 命令行
+        run: curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin supabase && supabase --version
       - name: 更新数据库
         run: scripts/apply_migrations.sh
       - name: 部署接口
@@ -90,9 +89,8 @@ jobs:
       PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'webbqhvgmsxjxgkfxxhp' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: 安装 Supabase 命令行
+        run: curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin supabase && supabase --version
       - name: 生成网页配置
         run: |
           ANON=$(supabase projects api-keys --project-ref "$PROJECT_REF" -o json \
