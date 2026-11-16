@@ -1,0 +1,6 @@
+# Supabase CLI 配置（只用于部署接口函数）
+project_id = "order-hub"
+
+[functions.api]
+# Agent 用的是本系统自己的令牌（oh_ 开头），不是 Supabase 登录凭证，所以关闭网关的凭证检查，由函数自己验证
+verify_jwt = false

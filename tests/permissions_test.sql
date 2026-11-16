@@ -185,5 +185,14 @@ select t.as_user('');
 select t.ok((select count(*) from public.orders) = 0, '令牌无效（无身份）时读不到订单');
 select t.ok((select count(*) from storage.objects) = 0, '令牌无效（无身份）时读不到照片');
 
+-- 第一个管理员只能设一次
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1', 'x@example.com');
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-0000000000e1');
+select t.ok(public.needs_bootstrap() = false, '已有管理员时不需要初始化');
+select t.fails($$select public.bootstrap_admin('冒充者')$$, '已有管理员时不能再把自己设为管理员');
+select t.ok((select count(*) from public.orders) = 0, '没有资料的登录用户看不到任何订单');
+
 reset role;
 \echo ALL_TESTS_PASSED

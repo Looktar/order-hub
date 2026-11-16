@@ -1,0 +1,80 @@
+# 日常维护（全部免费）：
+# 1. 每 3 天访问一次数据库，防止 Supabase 免费项目因 7 天无访问而暂停
+# 2. 每周备份一次数据。备份先用 BACKUP_PASSPHRASE 加密再保存（公开仓库的附件别人也能下载，所以必须加密）；没设这个 Secret 就跳过备份
+# 3. 每月提交一次时间戳，防止 GitHub 因仓库 60 天无动静而停用定时任务
+name: 日常维护
+
+on:
+  schedule:
+    - cron: "17 9 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    name: 保持数据库活跃
+    runs-on: ubuntu-latest
+    steps:
+      - name: 访问数据库
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          curl -sf -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+            -d '{"query":"select count(*) from public.orders"}' > /dev/null
+          echo "数据库正常"
+
+  backup:
+    name: 每周备份
+    runs-on: ubuntu-latest
+    steps:
+      - name: 判断是否该备份
+        id: when
+        env:
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$PASS" ]; then echo "没有设置 BACKUP_PASSPHRASE，跳过备份"; echo "go=no" >> $GITHUB_OUTPUT; exit 0; fi
+          # 定时任务每 3 天跑一次，只在周一到周三之间那次做备份；手动运行时总是备份
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date +%u)" -le 3 ]; then echo "go=yes" >> $GITHUB_OUTPUT; else echo "go=no" >> $GITHUB_OUTPUT; fi
+      - uses: actions/checkout@v4
+        if: steps.when.outputs.go == 'yes'
+      - uses: supabase/setup-cli@v1
+        if: steps.when.outputs.go == 'yes'
+        with:
+          version: latest
+      - name: 导出并加密
+        if: steps.when.outputs.go == 'yes'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db dump --data-only --password "$SUPABASE_DB_PASSWORD" -f data.sql
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" --symmetric --cipher-algo AES256 -o "backup-$(date +%F).sql.gpg" data.sql
+          shred -u data.sql
+      - uses: actions/upload-artifact@v4
+        if: steps.when.outputs.go == 'yes'
+        with:
+          name: order-hub-backup
+          path: backup-*.sql.gpg
+          retention-days: 90
+
+  heartbeat:
+    name: 保持定时任务不被停用
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 每月提交一次
+        run: |
+          f=.github/last-upkeep
+          month=$(date +%Y-%m)
+          if [ "$(cat $f 2>/dev/null)" = "$month" ]; then echo "本月已提交"; exit 0; fi
+          echo "$month" > $f
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $f && git commit -m "日常维护 $month [skip ci]" && git push
