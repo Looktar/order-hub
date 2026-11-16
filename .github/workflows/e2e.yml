@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   e2e:
@@ -59,3 +59,13 @@ jobs:
           name: screenshots
           path: screenshots/
           if-no-files-found: ignore
+      - name: 截图放到 e2e-screenshots 分支（只有测试数据），方便直接在 GitHub 上看
+        if: always()
+        run: |
+          [ -d screenshots ] || exit 0
+          cd screenshots
+          git init -q -b e2e-screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "端到端测试截图 ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" e2e-screenshots
