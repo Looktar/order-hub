@@ -66,6 +66,8 @@ printf '\xff\xd8\xff\xe0fakejpeg' > /tmp/p.jpg
 PH=$(curl -s -X POST "$FN/orders/$O1/photos?kind=order" -H "Authorization: Bearer $SA" -H "Content-Type: image/jpeg" --data-binary @/tmp/p.jpg | jq -r .id)
 [ "$PH" != "null" ] && ok "销售甲上传订单照片" || die "销售甲上传订单照片" "$PH"
 URL=$(call "$SA" GET "/photos/$PH" | jq -r .url)
+# 本地测试时接口内部看到的地址是 kong:8000，换成外部地址；线上没有这个问题
+URL=$(echo "$URL" | sed -E "s#^https?://(kong|supabase_kong[^/]*)(:8000)?#$API_URL#")
 expect "销售甲能打开自己的照片" "200" "$(curl -s -o /dev/null -w '%{http_code}' "$URL")"
 O2=$(call "$SB" POST /orders '{"customer":"客户乙","items":[{"category":"tire","spec":"225/65R17","qty":4,"unit":"条"}]}' | jq -r .id)
 
