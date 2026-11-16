@@ -22,7 +22,7 @@ const browser = await chromium.launch();
 const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const DESK = { viewport: { width: 1360, height: 900 } };
 
-async function open(opts, login, pw, locale = "zh-CN") {
+async function open(opts, login, pw, locale = "zh-CN", keepLang = false) {
   const ctx = await browser.newContext({ ...opts, locale, timezoneId: "America/Toronto" });
   const page = await ctx.newPage();
   page.errors = [];
@@ -34,6 +34,17 @@ async function open(opts, login, pw, locale = "zh-CN") {
   await page.fill("#pw", pw);
   await page.click("button[type=submit]");
   await page.waitForSelector(".top", { timeout: 15000 });
+  // 前面的测试可能把这个账号切成了别的语言，走查统一用中文（除非指定）
+  if (keepLang !== true) {
+    await page.goto(WEB + "#/settings");
+    await page.waitForSelector("#langsel");
+    if ((await page.locator("#langsel").inputValue()) !== "zh") {
+      await page.selectOption("#langsel", "zh");
+      await page.waitForSelector("h1:has-text('设置')");
+    }
+    await page.goto(WEB + "#/");
+    await page.waitForSelector(".top");
+  }
   return { ctx, page };
 }
 
@@ -65,10 +76,16 @@ async function step(name, fn, page) {
 }
 
 const text = async (page, sel = "main") => (await page.locator(sel).first().innerText().catch(() => ""));
-const toastText = async (page) => {
-  const t = page.locator(".toast").last();
-  await t.waitFor({ timeout: 4000 }).catch(() => {});
-  return (await t.innerText().catch(() => "")).trim();
+// 等新弹出的提示（不会读到上一条还没消失的）
+const toastText = async (page, before) => {
+  const start = before ?? 0;
+  await page.waitForFunction((k) => document.querySelectorAll(".toast").length > k, start, { timeout: 5000 }).catch(() => {});
+  return (await page.locator(".toast").last().innerText().catch(() => "")).trim();
+};
+const clickForToast = async (page, locator) => {
+  const before = await page.locator(".toast").count();
+  await locator.click();
+  return toastText(page, before);
 };
 const orderIdFromUrl = (page) => Number((page.url().match(/order\/(\d+)/) || [])[1]);
 
@@ -86,15 +103,12 @@ await step("账号管理", async () => {
   await add.locator("label:has-text('姓名') input").fill("测试销售三");
   await add.locator("label:has-text('登录名') input").fill("ventas03");
   await add.locator("label:has-text('初始密码') input").fill("123");
-  await add.locator("button:has-text('添加')").click();
-  const t1 = await toastText(page);
+  const t1 = await clickForToast(page, add.locator("button:has-text('添加')"));
   ok("密码太短时给出提示", /8/.test(t1), t1);
   // 正常添加一个西班牙语销售
-  await page.waitForTimeout(3500);
   await add.locator("label:has-text('初始密码') input").fill("pass-ventas03");
   await add.locator("label:has-text('语言') select").selectOption("es");
-  await add.locator("button:has-text('添加')").click();
-  const t2 = await toastText(page);
+  const t2 = await clickForToast(page, add.locator("button:has-text('添加')"));
   ok("能添加新销售账号", /ventas03/.test(t2), t2);
   await page.waitForTimeout(800);
   ok("新账号出现在列表里，语言是 Español", /测试销售三[\s\S]*ventas03[\s\S]*Español/.test(await text(page)));
@@ -102,8 +116,7 @@ await step("账号管理", async () => {
   await add.locator("label:has-text('姓名') input").fill("重复");
   await add.locator("label:has-text('登录名') input").fill("ventas03");
   await add.locator("label:has-text('初始密码') input").fill("pass-ventas03");
-  await add.locator("button:has-text('添加')").click();
-  const t3 = await toastText(page);
+  const t3 = await clickForToast(page, add.locator("button:has-text('添加')"));
   ok("重复的登录名会被拒绝并提示", t3.length > 0 && !/已为/.test(t3), t3);
   await shot(page, "添加账号后");
 }, page);
@@ -196,8 +209,7 @@ await step("看板和筛选", async () => {
 await step("派单与改派", async () => {
   await page.click(`a[href='#/order/${newOrder}']`);
   await page.waitForSelector("text=派给司机");
-  await page.click("button[data-action=assign]");
-  ok("没选司机就派单会提示", /司机/.test(await toastText(page)));
+  ok("没选司机就派单会提示", /司机/.test(await clickForToast(page, page.locator("button[data-action=assign]"))));
   await page.selectOption("#drv", { label: "司机老李" });
   await page.click("button[data-action=assign]");
   await page.waitForSelector("text=改派司机");
@@ -290,9 +302,7 @@ await step("现场改单", async () => {
 await step("报告问题", async () => {
   await page.click("button[data-action=issue]");
   await page.waitForSelector("#issue");
-  await page.click("button:has-text('发送')");
-  ok("问题不写内容会提示", (await toastText(page)).length > 0);
-  await page.waitForTimeout(3500);
+  ok("问题不写内容会提示", (await clickForToast(page, page.locator("button:has-text('发送')"))).length > 0);
   await page.fill("#issue", "客户中午不在，下午再送");
   await page.click("button:has-text('发送')");
   await page.waitForSelector("text=已报告问题");
@@ -356,7 +366,7 @@ await step("看通知和最终结果", async () => {
 await ctx.close();
 
 role = "新销售";
-({ ctx, page } = await open(PHONE, "ventas03", "pass-ventas03", "zh-CN"));
+({ ctx, page } = await open(PHONE, "ventas03", "pass-ventas03", "zh-CN", true));
 await step("新开的西班牙语账号", async () => {
   ok("新账号第一次登录就是西班牙语", /Mis pedidos/.test(await text(page)));
   await shot(page, "首页");
