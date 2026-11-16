@@ -1,6 +1,7 @@
 # 日常维护（全部免费）：
 # 1. 每 3 天访问一次数据库，防止 Supabase 免费项目因 7 天无访问而暂停
-# 2. 每周备份一次数据。备份先用 BACKUP_PASSPHRASE 加密再保存（公开仓库的附件别人也能下载，所以必须加密）；没设这个 Secret 就跳过备份
+# 2. 每周把全部数据导出为 JSON，用 BACKUP_PASSPHRASE 加密后保存 90 天
+#    （公开仓库的附件别人也能下载，所以必须加密）；没设这个 Secret 就跳过
 # 3. 每月提交一次时间戳，防止 GitHub 因仓库 60 天无动静而停用定时任务
 name: 日常维护
 
@@ -12,19 +13,19 @@ on:
 permissions:
   contents: write
 
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'webbqhvgmsxjxgkfxxhp' }}
+
 jobs:
   keepalive:
     name: 保持数据库活跃
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: 访问数据库
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
-          curl -sf -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
-            -d '{"query":"select count(*) from public.orders"}' > /dev/null
+          scripts/sb_sql.sh "select count(*) from public.orders" > /dev/null
           echo "数据库正常"
 
   backup:
@@ -37,31 +38,28 @@ jobs:
           PASS: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           if [ -z "$PASS" ]; then echo "没有设置 BACKUP_PASSPHRASE，跳过备份"; echo "go=no" >> $GITHUB_OUTPUT; exit 0; fi
-          # 定时任务每 3 天跑一次，只在周一到周三之间那次做备份；手动运行时总是备份
+          # 定时任务每 3 天跑一次，只在周一到周三之间那次备份；手动运行时总是备份
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date +%u)" -le 3 ]; then echo "go=yes" >> $GITHUB_OUTPUT; else echo "go=no" >> $GITHUB_OUTPUT; fi
       - uses: actions/checkout@v4
         if: steps.when.outputs.go == 'yes'
-      - uses: supabase/setup-cli@v1
-        if: steps.when.outputs.go == 'yes'
-        with:
-          version: latest
       - name: 导出并加密
         if: steps.when.outputs.go == 'yes'
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           PASS: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db dump --data-only --password "$SUPABASE_DB_PASSWORD" -f data.sql
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" --symmetric --cipher-algo AES256 -o "backup-$(date +%F).sql.gpg" data.sql
-          shred -u data.sql
+          q="select json_build_object('exported_at', now()"
+          for t in profiles orders order_items order_changes order_photos events event_recipients; do
+            q="$q, '$t', (select coalesce(json_agg(x), '[]') from public.$t x)"
+          done
+          scripts/sb_sql.sh "$q) as data" > data.json
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" --symmetric --cipher-algo AES256 \
+              -o "backup-$(date +%F).json.gpg" data.json
+          shred -u data.json
       - uses: actions/upload-artifact@v4
         if: steps.when.outputs.go == 'yes'
         with:
           name: order-hub-backup
-          path: backup-*.sql.gpg
+          path: backup-*.json.gpg
           retention-days: 90
 
   heartbeat:
