@@ -89,6 +89,7 @@ AGENT=公司Agent
 expect "公司收到新订单通知" "2" "$(call "$C1" GET /notifications | jq '[.[] | select(.type=="submitted")] | length')"
 call "$C1" POST /orders/$O1/assign '{"driver_name":"司机老王"}' > /dev/null
 call "$C1" POST /orders/$O2/assign '{"driver_name":"司机老李"}' > /dev/null
+expect "中文 Agent 名字不乱码" "公司Agent" "$(call "$SA" GET /orders/$O1 | jq -r '.timeline[] | select(.type=="assigned") | .via')"
 expect "派单后销售甲不能再改" "403" "$(code "$SA" POST /orders/$O1/changes '{"fields":{"note":"x"}}')"
 for t in "$SA" "$SB" "$C1" "$C2" "$D1" "$D2"; do call "$t" POST /notifications/read '{}' > /dev/null; done
 

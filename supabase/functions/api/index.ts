@@ -60,8 +60,18 @@ function newToken() {
   return "oh_" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// 请求头按 latin1 解码，中文等 UTF-8 名字会变成乱码：这里还原。也接受 %E5%85%AC 这种编码过的写法。
+function decodeHeader(v: string) {
+  let s = v;
+  if (!/[^\x00-\xff]/.test(s) && /[\x80-\xff]/.test(s)) {
+    try { s = new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(s, (c) => c.charCodeAt(0))); } catch { /* 保持原样 */ }
+  }
+  if (/%[0-9A-Fa-f]{2}/.test(s)) { try { s = decodeURIComponent(s); } catch { /* 保持原样 */ } }
+  return s;
+}
+
 function cleanVia(v: string | null | undefined) {
-  return (v ?? "").replace(/[\r\n]/g, " ").trim().slice(0, 40);
+  return decodeHeader(v ?? "").replace(/[\r\n]/g, " ").trim().slice(0, 40);
 }
 
 function requestedLang(req: Request) {
