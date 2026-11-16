@@ -238,7 +238,7 @@ await step("派单与改派", async () => {
 }, page);
 await step("第二张单派给老王", async () => {
   await page.goto(WEB + `#/order/${cancelOrder}`);
-  await page.waitForSelector("#drv");
+  await page.waitForSelector("h1:has-text('要取消的汽修')");
   await page.selectOption("#drv", { label: "司机老王" });
   await page.click("button[data-action=assign]");
   await page.waitForSelector("text=改派司机");
@@ -302,7 +302,7 @@ await step("在列表上直接出发", async () => {
 }, page);
 await step("送货单", async () => {
   await page.click(`a[href='#/order/${newOrder}']`);
-  await page.waitForSelector("button[data-action=start]");
+  await page.waitForSelector(`h1:has-text('送货单 #${newOrder}')`);
   const body = await text(page);
   ok("送货单上有派单时间", /派单/.test(body));
   ok("有导航和打电话按钮", (await page.locator("a:has-text('导航')").count()) === 1 && (await page.locator("a:has-text('打电话')").count()) === 1);
@@ -386,6 +386,7 @@ role = "公司";
 ({ ctx, page } = await open(DESK, "office2", "pass-office2"));
 await step("取消订单", async () => {
   await page.goto(WEB + `#/order/${cancelOrder}`);
+  await page.waitForSelector("h1:has-text('要取消的汽修')");
   await page.click("a[data-action=cancel]");
   await page.waitForSelector("button[data-action=confirm-cancel]");
   await page.click("button[data-action=confirm-cancel]");
