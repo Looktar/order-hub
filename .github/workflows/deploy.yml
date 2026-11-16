@@ -111,3 +111,25 @@ jobs:
           path: web
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  smoke:
+    name: 线上检查
+    needs: web
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'webbqhvgmsxjxgkfxxhp' }}
+    steps:
+      - name: 网页、接口和权限
+        run: |
+          site="https://looktar.github.io/order-hub/"
+          for i in $(seq 1 12); do [ "$(curl -s -o /dev/null -w '%{http_code}' "$site")" = "200" ] && break; sleep 10; done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$site")" = "200" ] && echo "通过：网页能打开"
+          key=$(curl -sf "${site}config.js" | grep -o 'supabaseAnonKey: "[^"]*"' | cut -d'"' -f2)
+          [ -n "$key" ] && echo "通过：网页配置已生成"
+          api="https://$PROJECT_REF.supabase.co/functions/v1/api"
+          curl -sf "$api" | grep -q "订单协作系统" && echo "通过：Agent 接口在线"
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$api/orders" -H 'Authorization: Bearer oh_invalid')" = "401" ] && echo "通过：错误令牌被拒绝"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://$PROJECT_REF.supabase.co/rest/v1/orders" -H "apikey: $key")
+          [ "$code" != "200" ] && echo "通过：未登录读不到订单（$code）"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "https://$PROJECT_REF.supabase.co/auth/v1/signup" -H "apikey: $key" -H "Content-Type: application/json" -d '{"email":"probe-'$RANDOM'@example.com","password":"probe-pass-123456"}')
+          [ "$code" != "200" ] && echo "通过：自助注册已关闭（$code）"
