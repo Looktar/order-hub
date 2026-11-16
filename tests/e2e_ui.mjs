@@ -132,6 +132,46 @@ await page.waitForSelector(".err");
 check((await page.locator(".err").innerText()).includes("无权查看"), "销售乙打不开销售甲的订单");
 await ctx.close();
 
+
+// 6. 西班牙语：销售甲在设置里切换语言，看通知和订单
+({ ctx, page } = await session(phone, "sales-a", "pass-sales-a"));
+await page.click("a[href='#/settings']");
+await page.selectOption("#langsel", "es");
+await page.waitForSelector("h1:has-text('Ajustes')");
+await shot(page, "西班牙语-设置");
+await page.click("a[href='#/notifications']");
+await page.waitForSelector(".notice");
+const es = await page.locator(".list").innerText();
+check(es.includes("modificado por") && es.includes("entregado"), "西班牙语通知内容是西班牙语");
+await shot(page, "西班牙语-通知");
+await page.click(`a[href='#/order/${orderId}']`);
+await page.waitForSelector("text=Cambios y notificaciones");
+check((await page.locator("main").innerText()).includes("Aceite de motor"), "西班牙语订单详情货品名是西班牙语");
+await shot(page, "西班牙语-订单详情");
+await ctx.close();
+
+// 7. 英语：公司二在登录页选英语，看看板
+{
+  const c2 = await browser.newContext({ ...desk, locale: "zh-CN" });
+  const p2 = await c2.newPage();
+  p2.on("pageerror", (e) => errors.push(`en: ${e.message}`));
+  await p2.goto(WEB);
+  await p2.selectOption("#langsel", "en");
+  await p2.waitForSelector("button:has-text('Sign in')");
+  await shot(p2, "英语-登录");
+  await p2.fill("#login", "office2"); await p2.fill("#pw", "pass-office2");
+  await p2.click("button[type=submit]");
+  await p2.waitForSelector(".board");
+  const txt = await p2.locator(".board").innerText();
+  check(txt.includes("Out for delivery") && txt.includes("Delivered"), "英语看板栏目是英文");
+  await shot(p2, "英语-公司看板");
+  await p2.click(`a[href='#/order/${orderId}']`);
+  await p2.waitForSelector("text=Changes and notifications");
+  check((await p2.locator("main").innerText()).includes("changed by"), "英语订单详情的修改记录是英文");
+  await shot(p2, "英语-订单详情");
+  await c2.close();
+}
+
 await browser.close();
 check(errors.length === 0, "页面没有脚本错误" + (errors.length ? "：" + errors.join("；") : ""));
 console.log("E2E_UI_PASSED");

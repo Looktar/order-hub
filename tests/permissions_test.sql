@@ -132,7 +132,7 @@ select t.fails($$update public.orders set status = 'delivered' where id = 1$$, '
 select t.fails($$delete from public.order_changes$$, '修改记录不能删除');
 select t.fails($$update public.order_changes set reason = 'x'$$, '修改记录不能改');
 select t.fails($$select * from public.agent_tokens$$, '读不到 Agent 令牌表');
-select t.fails($$select app.emit(1, 'x', null, 'x', array['company'])$$, '不能直接伪造通知');
+select t.fails($$select app.emit(1, 'x', null, '{"zh":"x","en":"x","es":"x"}'::jsonb, array['company'])$$, '不能直接伪造通知');
 
 -- 送达
 select t.fails($$select public.confirm_delivered(1)$$, '没有签收照片不能确认送达');
@@ -184,6 +184,31 @@ set role authenticated;
 select t.as_user('');
 select t.ok((select count(*) from public.orders) = 0, '令牌无效（无身份）时读不到订单');
 select t.ok((select count(*) from storage.objects) = 0, '令牌无效（无身份）时读不到照片');
+
+-- 多语言
+reset role;
+select t.ok((select count(*) from public.events where summary_i18n ?& array['zh', 'en', 'es']) = (select count(*) from public.events), '每条通知都有中英西三种语言');
+select t.ok((select summary_i18n->>'en' from public.events where type = 'modified' and order_id = 1 order by id desc limit 1)
+            like 'Order #1 changed by 司机一 (driver): Engine oil 5W-30: 10 → 8箱%reason: 客户现场只收 8 箱%', '英文修改通知内容正确');
+select t.ok((select summary_i18n->>'es' from public.events where type = 'delivered' and order_id = 1) like 'Pedido #1 (客户甲) entregado.%', '西班牙文送达通知内容正确');
+set role authenticated;
+select t.as_user('00000000-0000-0000-0000-00000000a001');
+select public.set_my_lang('es');
+select t.ok((select summary from public.my_notifications(false) where type = 'delivered' limit 1) like 'Pedido #1%', '销售甲改成西班牙语后通知按西班牙语显示');
+select t.ok((select summary from public.my_notifications(false, 50, 'en') where type = 'delivered' limit 1) like 'Order #1%', '可以临时指定英语');
+select t.ok((public.order_detail(1)->'items'->0->>'category_label') = 'Aceite de motor', '订单详情货品名按西班牙语显示');
+select t.ok((select string_agg(c->>'field', ',') from jsonb_array_elements(public.order_detail(1, 'en')->'changes') c) like '%Engine oil 5W-30%', '修改记录按英语显示货品名');
+select t.fails($$select public.set_my_lang('fr')$$, '不支持的语言被拒绝');
+do $$ begin
+  perform public.modify_order(1, '{"items":[{"id":1,"qty":1}]}', 'x');
+  raise exception '本应失败';
+exception when others then
+  declare h text; begin
+    get stacked diagnostics h = pg_exception_hint;
+    if h is distinct from 'order_not_found' and h is distinct from 'sales_edit_locked' then raise exception '测试失败：错误代码不对：%', h; end if;
+    raise notice '通过：报错带错误代码（%）', h;
+  end;
+end $$;
 
 -- 第一个管理员只能设一次
 reset role;

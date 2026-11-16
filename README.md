@@ -7,7 +7,8 @@
 ```
 
 - 网页：https://looktar.github.io/order-hub/ （手机、电脑都能用）
-- Agent 接入：见 [AGENTS.md](AGENTS.md)
+- 语言：中文、English、Español。登录页和"设置 → 我的语言"里切换；每个人看到的通知都是自己的语言
+- Agent 接入：见 [AGENTS.md](AGENTS.md)（中文）、[AGENTS.en.md](AGENTS.en.md)（English）、[AGENTS.es.md](AGENTS.es.md)（Español）
 - 第一次部署：见 [docs/部署设置.md](docs/部署设置.md)
 
 ## 怎么用

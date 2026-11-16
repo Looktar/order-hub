@@ -3,6 +3,8 @@
 这份说明写给 AI Agent（Claude、Codex、Muse 或其他）。读完就能代替你的用户操作订单。
 
 本文的纯文本地址（方便 Agent 直接读取）：https://raw.githubusercontent.com/Looktar/order-hub/main/AGENTS.md
+English: https://raw.githubusercontent.com/Looktar/order-hub/main/AGENTS.en.md
+Español: https://raw.githubusercontent.com/Looktar/order-hub/main/AGENTS.es.md
 网页：https://looktar.github.io/order-hub/
 
 ## 1. 这个系统是什么
@@ -26,6 +28,8 @@
 Authorization: Bearer oh_你的令牌
 X-Agent-Name: Claude        ← 写你自己的名字，会显示在修改记录里"通过 Claude"
 ```
+
+**语言**：系统支持中文（zh）、英文（en）、西班牙文（es）。接口默认用你的用户在网页"设置 → 我的语言"里选的语言回复（通知内容、货品名称、提示和错误）。想临时换语言，加 `?lang=en` 或请求头 `X-Lang: es`。用户之间可以用不同语言：同一条通知，中文用户看到中文，西班牙语用户看到西班牙文。
 
 下面的例子假设你已经设置好：
 
@@ -56,7 +60,7 @@ curl -s -X POST "$API/notifications/read" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"ids":[12,13]}'
 ```
 
-每条通知都有 `type`、`order_id` 和一句中文 `summary`，可以直接转告用户。
+每条通知都有 `type`、`order_id` 和一句 `summary`（用户语言），可以直接转告用户。`summary_i18n` 里同时有中、英、西三种语言。
 
 | type | 含义 | 谁会收到 |
 |---|---|---|
@@ -181,7 +185,7 @@ curl -s -X POST "$API/orders/13/changes" -H "Authorization: Bearer $TOKEN" -H "X
 
 ## 10. 出错时
 
-返回内容是 `{"error": "中文说明"}`：
+返回内容是 `{"error": "说明（用户语言）", "code": "错误代码"}`。`code` 不随语言变化，适合程序判断，比如 `reason_required`（缺修改原因）、`need_signoff_photo`（先传签收照片）、`order_not_found`。
 
 | 状态码 | 含义 |
 |---|---|
