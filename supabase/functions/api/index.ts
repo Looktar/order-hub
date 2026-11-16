@@ -63,8 +63,9 @@ function newToken() {
 // 请求头按 latin1 解码，中文等 UTF-8 名字会变成乱码：这里还原。也接受 %E5%85%AC 这种编码过的写法。
 function decodeHeader(v: string) {
   let s = v;
-  if (!/[^\x00-\xff]/.test(s) && /[\x80-\xff]/.test(s)) {
-    try { s = new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(s, (c) => c.charCodeAt(0))); } catch { /* 保持原样 */ }
+  // Supabase 的网关有时会多转一次，所以最多还原 3 层
+  for (let i = 0; i < 3 && !/[^\x00-\xff]/.test(s) && /[\x80-\xff]/.test(s); i++) {
+    try { s = new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(s, (c) => c.charCodeAt(0))); } catch { break; }
   }
   if (/%[0-9A-Fa-f]{2}/.test(s)) { try { s = decodeURIComponent(s); } catch { /* 保持原样 */ } }
   return s;
