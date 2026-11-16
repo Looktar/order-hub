@@ -1,6 +1,9 @@
 # AGENTS.md：Agent 接入说明
 
-这份说明写给 AI Agent（Claude、Codex 或其他）。读完就能代替你的用户操作订单。
+这份说明写给 AI Agent（Claude、Codex、Muse 或其他）。读完就能代替你的用户操作订单。
+
+本文的纯文本地址（方便 Agent 直接读取）：https://raw.githubusercontent.com/Looktar/order-hub/main/AGENTS.md
+网页：https://looktar.github.io/order-hub/
 
 ## 1. 这个系统是什么
 
@@ -14,7 +17,7 @@
 
 ## 2. 你需要用户给你的两样东西
 
-- **接口地址**：`https://<项目>.supabase.co/functions/v1/api`
+- **接口地址**：`https://webbqhvgmsxjxgkfxxhp.supabase.co/functions/v1/api`
 - **个人令牌**：以 `oh_` 开头。用户在网页"设置 → 我的 Agent 令牌"里生成，只显示一次，请妥善保存，不要写进任何公开的地方。
 
 每个请求都要带这两个请求头：
@@ -27,7 +30,7 @@ X-Agent-Name: Claude        ← 写你自己的名字，会显示在修改记录
 下面的例子假设你已经设置好：
 
 ```bash
-export API="https://<项目>.supabase.co/functions/v1/api"
+export API="https://webbqhvgmsxjxgkfxxhp.supabase.co/functions/v1/api"
 export TOKEN="oh_..."
 ```
 

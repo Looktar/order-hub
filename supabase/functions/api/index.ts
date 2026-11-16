@@ -125,7 +125,12 @@ async function route(req: Request): Promise<Response> {
   const seg = path.split("/").filter(Boolean);
 
   if (path === "/" && m === "GET") {
-    return json({ name: "订单协作系统 API", docs: "见仓库里的 AGENTS.md" });
+    return json({
+      name: "订单协作系统 API",
+      docs: "https://raw.githubusercontent.com/Looktar/order-hub/main/AGENTS.md",
+      docs_page: "https://github.com/Looktar/order-hub/blob/main/AGENTS.md",
+      hint: "Agent 请先读 docs 里的接入说明，再用 Authorization: Bearer <令牌> 调用",
+    });
   }
 
   const c = await identify(req);
