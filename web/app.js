@@ -52,7 +52,7 @@ const icon = (d, size = 18) => {
 const I = {
   back: "M15 18l-6-6 6-6", plus: "M12 5v14M5 12h14", bell: "M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9|M10 21h4",
   cam: "M4 8h3l2-3h6l2 3h3v11H4z|M12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z",
-  check: "M5 12.5l4.5 4.5L19 7", logo: "M5 12h.01M12 12h.01M19 12h.01|M7 12h3M14 12h3",
+  check: "M5 12.5l4.5 4.5L19 7", logo: "M3 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0|M10 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0|M17 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0|M7 12h3M14 12h3",
 };
 const fmtQty = (q) => String(Number(q));
 const fmtTime = (t) => {
@@ -132,10 +132,10 @@ function shell(...content) {
   const bell = h("a", { href: "#/notifications", class: "iconbtn", "aria-label": `通知，${unread} 条未读` }, icon(I.bell),
     unread ? h("span", { class: "badge", "aria-hidden": "true" }, unread > 99 ? "99+" : unread) : null);
   const top = h("header", { class: "top" },
-    h("a", { href: "#/", class: "brand" }, icon(I.logo, 26), "订单协作"),
+    h("a", { href: "#/", class: "brand", "aria-label": "订单协作首页" }, icon(I.logo, 26), h("span", { class: "t" }, "订单协作")),
     h("span", { class: "who" }, `${me.name} · ${ROLE[me.role]}`),
     h("span", { class: "grow" }),
-    me.role === "sales" ? h("a", { href: "#/new", class: "btn primary" }, icon(I.plus, 16), "新建订单") : null,
+    me.role === "sales" ? h("a", { href: "#/new", class: "btn primary", "aria-label": "新建订单" }, icon(I.plus, 16), h("span", { class: "t" }, "新建订单")) : null,
     bell,
     h("a", { href: "#/settings", class: "iconbtn", "aria-label": "设置" }, icon(I.gear)),
   );
@@ -344,12 +344,12 @@ function itemsCard(d) {
   return h("section", { class: "card" },
     h("div", { class: "row" }, h("h2", {}, "货品清单"), modified ? h("span", { class: "chip warn" }, "数量有改动") : null),
     h("div", { class: "tablewrap" }, h("table", { class: "t" },
-      h("thead", {}, h("tr", {}, h("th", {}, "品类"), h("th", {}, "规格"), h("th", {}, "数量"))),
+      h("thead", {}, h("tr", {}, h("th", {}, "货品"), h("th", { style: "text-align:right" }, "数量"))),
       h("tbody", {}, d.items.map((i) => {
         const changed = Number(i.qty) !== Number(i.original_qty);
         return h("tr", { class: i.removed ? "removed" : "" },
-          h("td", {}, i.category_label), h("td", {}, i.spec || "—"),
-          h("td", {}, i.removed ? `已删除（原 ${fmtQty(i.original_qty)}${i.unit}）`
+          h("td", {}, i.category_label, i.spec ? h("div", { class: "small muted" }, i.spec) : null),
+          h("td", { style: "text-align:right;white-space:nowrap" }, i.removed ? `已删除（原 ${fmtQty(i.original_qty)}${i.unit}）`
             : [changed ? h("span", { class: "was" }, Number(i.original_qty) === 0 ? "新增" : `${fmtQty(i.original_qty)}${i.unit}`) : null,
                h("strong", {}, `${fmtQty(i.qty)}${i.unit}`)]));
       })))));

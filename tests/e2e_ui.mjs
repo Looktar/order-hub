@@ -2,12 +2,25 @@
 // 运行前需要：本地 Supabase 已启动、接口已运行、e2e_api.sh 已建好账号、网页在 WEB_URL 上提供。
 import { chromium } from "playwright";
 import fs from "node:fs";
+import zlib from "node:zlib";
 
 const WEB = process.env.WEB_URL || "http://127.0.0.1:8080/";
 const OUT = "screenshots";
 fs.mkdirSync(OUT, { recursive: true });
 const PHOTO = "/tmp/ui-photo.png";
-fs.writeFileSync(PHOTO, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAADVLyQMAAAAPklEQVR4nO3PQQ0AIBDAsIF/z0cyAZ4kQKmO5gEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPg2dAQAAZQ7ZpsAAAAASUVORK5CYII=", "base64"));
+fs.writeFileSync(PHOTO, makePng(320, 240));
+
+// 生成一张有效的 PNG（浅蓝底，模拟订单照片）
+function makePng(w, h) {
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = 200; raw[o + 1] = 215 - (y % 40); raw[o + 2] = 245; }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
 
 const browser = await chromium.launch();
 const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
@@ -59,7 +72,8 @@ await page.waitForURL(/#\/order\/\d+$/);
 const orderId = Number(page.url().match(/order\/(\d+)/)[1]);
 await page.waitForSelector("text=货品清单");
 await shot(page, "销售-订单已提交");
-check(await page.locator("img.photo").count() >= 1, "订单照片已上传并能显示");
+await page.waitForFunction(() => [...document.querySelectorAll("img.photo")].some((i) => i.complete && i.naturalWidth > 0), null, { timeout: 10000 }).catch(() => {});
+check(await page.evaluate(() => [...document.querySelectorAll("img.photo")].some((i) => i.naturalWidth > 0)), "订单照片已上传并能正常显示");
 await ctx.close();
 
 // 2. 公司在电脑上看看板、派单
