@@ -142,7 +142,7 @@ function shell(...content) {
   app.replaceChildren(top, h("main", {}, ...content));
 }
 function backLink(href = "#/", text = "返回") {
-  return h("a", { href, class: "btn link", style: "padding-left:0" }, icon(I.back, 16), text);
+  return h("a", { href, class: "btn link", style: "padding-left:0;align-self:flex-start" }, icon(I.back, 16), text);
 }
 
 // ------------------------------------------------------------------ 登录
