@@ -1,0 +1,61 @@
+# 端到端测试：在 GitHub 的机器上启动一套本地 Supabase（真实的登录、数据库、照片存储、接口），
+# 用测试账号把 销售 → 公司 → 司机 的流程走一遍：先走接口（模拟各方 Agent），再用浏览器走网页并截图。
+# 不会碰线上数据。截图在运行结果页面底部的 Artifacts 里下载。
+name: 端到端测试
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: 三方完整流程
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: 启动本地 Supabase
+        run: |
+          supabase start -x studio,imgproxy,postgres-meta,vector,logflare,realtime
+          supabase status -o env 2>/dev/null | sed 's/^/export /' > /tmp/sb.env
+          cat /tmp/sb.env | grep -E 'API_URL' || true
+      - name: 启动接口
+        run: |
+          nohup supabase functions serve api --no-verify-jwt > /tmp/fn.log 2>&1 &
+          . /tmp/sb.env
+          for i in $(seq 1 60); do
+            curl -sf "$API_URL/functions/v1/api" > /dev/null && break
+            sleep 3
+          done
+          curl -sf "$API_URL/functions/v1/api"
+      - name: 接口流程（模拟各方 Agent）
+        run: |
+          . /tmp/sb.env
+          tests/e2e_api.sh
+      - name: 准备网页和浏览器
+        run: |
+          . /tmp/sb.env
+          mkdir -p /tmp/site && cp -r web/* /tmp/site/
+          cat > /tmp/site/config.js <<EOF
+          window.ORDER_HUB_CONFIG = { supabaseUrl: "$API_URL", supabaseAnonKey: "$ANON_KEY", loginDomain: "users.order-hub.app" };
+          EOF
+          nohup python3 -m http.server 8080 -d /tmp/site > /tmp/web.log 2>&1 &
+          npm init -y > /dev/null && npm i playwright@1 > /dev/null && npx playwright install --with-deps chromium > /dev/null
+      - name: 网页流程（浏览器）
+        run: node tests/e2e_ui.mjs
+      - name: 接口日志
+        if: failure()
+        run: tail -100 /tmp/fn.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
