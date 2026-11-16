@@ -170,8 +170,10 @@ function loginView(msg) {
   const pw = h("input", { class: "i", id: "pw", type: "password", autocomplete: "current-password", required: true });
   const err = h("div", { class: "err", role: "alert", hidden: !msg }, msg || "");
   const btn = h("button", { class: "btn primary big", type: "submit" }, t("sign_in"));
-  const form = h("form", { class: "card", onsubmit: async (e) => {
-    e.preventDefault(); btn.disabled = true; err.hidden = true;
+  const form = h("form", { class: "card", novalidate: true, onsubmit: async (e) => {
+    e.preventDefault(); err.hidden = true;
+    if (!login.value.trim() || !pw.value) { err.textContent = t("login_failed"); err.hidden = false; return; }
+    btn.disabled = true;
     const l = login.value.trim().toLowerCase();
     const email = l.includes("@") ? l : `${l}@${LOGIN_DOMAIN}`;
     const { error } = await sb.auth.signInWithPassword({ email, password: pw.value });
@@ -317,7 +319,7 @@ function newOrderView() {
   };
   const err = h("div", { class: "err", role: "alert", hidden: true });
   const btn = h("button", { class: "btn primary big", type: "submit" }, t("send_to_company"));
-  const form = h("form", { class: "narrow stack", onsubmit: async (e) => {
+  const form = h("form", { class: "narrow stack", novalidate: true, onsubmit: async (e) => {
     e.preventDefault(); err.hidden = true;
     const items = rows.filter((r) => r.qty !== "" && Number(r.qty) > 0).map((r) => ({ ...r, qty: Number(r.qty) }));
     if (!f.customer.value.trim()) { err.textContent = t("need_customer"); err.hidden = false; return; }

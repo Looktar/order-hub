@@ -117,7 +117,7 @@ await step("账号管理", async () => {
   await add.locator("label:has-text('登录名') input").fill("ventas03");
   await add.locator("label:has-text('初始密码') input").fill("pass-ventas03");
   const t3 = await clickForToast(page, add.locator("button:has-text('添加')"));
-  ok("重复的登录名会被拒绝并提示", t3.length > 0 && !/已为/.test(t3), t3);
+  ok("重复的登录名会被拒绝，并用中文说明", /已经有人用了/.test(t3), t3);
   await shot(page, "添加账号后");
 }, page);
 await step("令牌生成与作废", async () => {
@@ -145,7 +145,7 @@ await step("新建订单的检查", async () => {
   await page.click("a[href='#/new']");
   await page.waitForSelector("h1:has-text('新建订单')");
   await page.click("button:has-text('发回公司')");
-  ok("不填客户时提示", /客户/.test(await page.locator(".err").innerText()));
+  ok("不填客户时用网站语言提示", /客户/.test(await page.locator(".err").innerText()));
   await page.getByLabel("客户 *").fill("走查汽修");
   await page.locator("input[type=number]").first().fill("");
   await page.click("button:has-text('发回公司')");
@@ -275,7 +275,7 @@ await step("送货单", async () => {
   ok("显示备注", /后门卸货/.test(body));
   await shot(page, "送货单-出发前");
   await page.click("button[data-action=start]");
-  await page.waitForSelector("a[data-action=edit]");
+  await page.waitForSelector("button[data-action=start]", { state: "detached" });
   ok("出发后显示出发时间", /出发/.test(await text(page)));
   await shot(page, "送货单-出发后");
 }, page);
@@ -361,6 +361,7 @@ await step("看通知和最终结果", async () => {
   await page.goto(WEB + `#/order/${newOrder}`);
   await page.waitForSelector("text=执行状态");
   ok("执行状态四个环节都有时间", (await page.locator("ol.steps time").count()) === 4);
+  ok("划线的原数量是销售更正后的 12 箱，不是更正前的 10 箱", (await page.locator("table.t .was").first().innerText()).includes("12"));
   await shot(page, "订单最终-销售");
 }, page);
 await ctx.close();

@@ -336,6 +336,7 @@ async function route(req: Request, setLang: (l: Lang) => void): Promise<Response
       if (password.length < 8) throw new HttpError(400, "password_short");
       const email = loginToEmail(login);
       const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+      if (error && /already|registered|exists/i.test(error.message)) throw new HttpError(400, "login_taken", { login });
       if (error || !data.user) throw new HttpError(400, "create_user_failed", { reason: error?.message ?? "" });
       await sql`insert into public.profiles (id, name, role, is_admin, login, lang)
                 values (${data.user.id}, ${name}, ${role}, ${b.is_admin === true}, ${login.toLowerCase()}, ${lang})`;

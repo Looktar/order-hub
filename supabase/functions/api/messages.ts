@@ -60,6 +60,8 @@ export const MESSAGES: Record<string, Msg> = {
   role_invalid: m("角色只能是 sales、company 或 driver", "Role must be sales, company or driver", "El rol debe ser sales, company o driver"),
   password_short: m("密码至少 8 位", "Password must be at least 8 characters", "La contraseña debe tener al menos 8 caracteres"),
   create_user_failed: m("建账号失败：{reason}", "Could not create the account: {reason}", "No se pudo crear la cuenta: {reason}"),
+  login_taken: m("登录名 {login} 已经有人用了，请换一个", "The username {login} is already taken. Choose another one.",
+    "El usuario {login} ya está en uso. Elige otro."),
   user_not_found: m("没有这个用户", "User not found", "No existe ese usuario"),
   self_disable: m("不能停用自己或取消自己的管理员", "You cannot disable yourself or remove your own admin rights",
     "No puedes desactivarte ni quitarte los permisos de administrador"),

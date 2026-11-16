@@ -86,7 +86,7 @@ table.t td { padding: 10px 8px; border-bottom: 1px solid var(--line2); vertical-
 table.t tr.removed td { color: var(--faint); text-decoration: line-through; }
 .was { color: var(--muted); text-decoration: line-through; margin-right: 6px; }
 .qtyin { width: 90px; }
-dl.kv { margin: 0; display: grid; grid-template-columns: 88px minmax(0, 1fr); row-gap: 8px; column-gap: 12px; }
+dl.kv { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); row-gap: 8px; column-gap: 12px; }
 dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 
 /* 记录与进度 */

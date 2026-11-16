@@ -62,6 +62,9 @@ select t.ok((select count(*) from public.orders) = 1 and (select min(id) from pu
 
 -- 销售在公司处理前可以改
 select t.ok(public.modify_order(1, '{"fields":{"note":"下午送"}}', null) = 1, '销售甲在公司处理前可以改自己的订单');
+select public.modify_order(1, '{"items":[{"id":2,"qty":22}]}', null);
+select t.ok((select original_qty from public.order_items where id = 2) = 22, '销售更正数量时，原数量跟着更正');
+select public.modify_order(1, '{"items":[{"id":2,"qty":20}]}', null);
 
 -- 角色限制
 select t.fails($$select public.assign_driver(1, '00000000-0000-0000-0000-00000000d001')$$, '销售不能派单');
@@ -96,7 +99,7 @@ select t.ok((select array_agg(p.name order by p.name) from public.event_recipien
               where e.type = 'modified' and e.order_id = 1 and r.read_at is null)
             = array['公司二', '销售甲'], '公司修改：只有其他公司账号和该单销售收到通知（司机、其他销售、操作人本人都收不到）');
 select t.ok((select old_value || '→' || new_value || '|' || reason || '|' || via || '|' || actor_role
-               from public.order_changes where order_id = 1 and field like '机油%')
+               from public.order_changes where order_id = 1 and item_id = 1 and actor_role = 'company')
             = '12箱→10箱|库存不足|公司Agent|company', '修改记录有原值、新值、原因、经由');
 update public.event_recipients set read_at = now();
 set role authenticated;
