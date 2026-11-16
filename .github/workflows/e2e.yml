@@ -50,6 +50,9 @@ jobs:
           npm init -y > /dev/null && npm i playwright@1 > /dev/null && npx playwright install --with-deps chromium > /dev/null
       - name: 网页流程（浏览器）
         run: node tests/e2e_ui.mjs
+      - name: 按角色走查（管理员、销售、公司、司机）
+        if: always()
+        run: node tests/walkthrough.mjs
       - name: 接口日志
         if: failure()
         run: tail -100 /tmp/fn.log

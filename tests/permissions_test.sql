@@ -185,6 +185,16 @@ select t.as_user('');
 select t.ok((select count(*) from public.orders) = 0, '令牌无效（无身份）时读不到订单');
 select t.ok((select count(*) from storage.objects) = 0, '令牌无效（无身份）时读不到照片');
 
+-- 时间戳
+reset role;
+select t.ok((select created_at is not null and assigned_at is not null and started_at is not null and delivered_at is not null
+               and created_at <= assigned_at and assigned_at <= started_at and started_at <= delivered_at
+             from public.orders where id = 1), '订单 #1 下单、派单、出发、送达时间都有，且先后顺序正确');
+select t.ok((select assigned_at is not null and started_at is null and delivered_at is null from public.orders where id = 2), '订单 #2 只有派单时间（还没出发）');
+select t.ok((public.order_detail(1) ? 'started_at') and (public.order_detail(1) ? 'assigned_at'), '订单详情里有派单和出发时间');
+update public.orders set created_at = now() + interval '1 day' where id = 1;
+select t.ok((select created_at < now() from public.orders where id = 1), '下单时间不能被改');
+
 -- 多语言
 reset role;
 select t.ok((select count(*) from public.events where summary_i18n ?& array['zh', 'en', 'es']) = (select count(*) from public.events), '每条通知都有中英西三种语言');

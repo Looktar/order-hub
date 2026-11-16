@@ -177,7 +177,7 @@ async function route(req: Request, setLang: (l: Lang) => void): Promise<Response
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 200);
     const rows = await asUser(c, (tx) => tx`
       select o.id, o.status, o.customer, o.address, o.due_date::text as due_date, o.has_issue, o.modified_by,
-             o.created_at, o.updated_at, s.name as sales_name, d.name as driver_name,
+             o.created_at, o.updated_at, o.assigned_at, o.started_at, o.delivered_at, s.name as sales_name, d.name as driver_name,
              coalesce((select json_agg(json_build_object('id', i.id, 'category', i.category,
                        'category_label', app.category_i18n(i.category) ->> ${L}::text, 'spec', i.spec,
                        'qty', i.qty, 'unit', i.unit, 'original_qty', i.original_qty) order by i.position)

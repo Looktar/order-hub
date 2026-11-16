@@ -91,6 +91,7 @@ curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 Estados: `pending` (pendiente de la empresa) → `assigned` (asignado a un conductor) → `delivering` (en reparto) → `delivered` (entregado).
 `modified_by` tiene valor cuando la empresa o el conductor modificaron el pedido; `has_issue` es true cuando hay un problema de entrega.
 En cada artículo, `original_qty` es lo que el vendedor escribió al principio y `qty` es la cantidad actual.
+Fechas (UTC, formato ISO): `created_at` pedido, `assigned_at` asignado, `started_at` salida del conductor, `delivered_at` entregado, `updated_at` último cambio.
 
 ## 6. Agente del vendedor
 

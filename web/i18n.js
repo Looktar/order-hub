@@ -18,6 +18,13 @@ const D = {
   via_agent: ["通过 {a}", "via {a}", "vía {a}"],
   system: ["系统", "System", "Sistema"],
   copied: ["已复制", "Copied", "Copiado"],
+  ordered_at: ["下单 {t}", "Ordered {t}", "Pedido {t}"],
+  updated_at_k: ["更新 {t}", "Updated {t}", "Actualizado {t}"],
+  ts_created: ["下单时间", "Ordered", "Fecha del pedido"],
+  ts_updated: ["最近更新", "Last updated", "Última actualización"],
+  ts_assigned: ["派单 {t}", "Assigned {t}", "Asignado {t}"],
+  ts_started: ["出发 {t}", "Left {t}", "Salió {t}"],
+  ts_delivered: ["送达 {t}", "Delivered {t}", "Entregado {t}"],
 
   // 角色、状态、品类
   role_sales: ["销售", "Sales", "Ventas"],

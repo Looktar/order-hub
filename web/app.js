@@ -76,6 +76,8 @@ const fmtTime = (ts) => {
   if (d.toDateString() === y.toDateString()) return t("yesterday_at", { t: hm });
   return `${d.toLocaleDateString(locale(), { month: "short", day: "numeric" })} ${hm}`;
 };
+const fmtFull = (ts) => (ts ? new Date(ts).toLocaleString(locale(), { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
+const timeEl = (ts, text) => h("time", { datetime: ts, title: fmtFull(ts) }, text ?? fmtTime(ts));
 const viaText = (v) => (!v || v === "本人" ? t("self") : t("via_agent", { a: v }));
 const today = () => new Date().toLocaleDateString("sv-SE");
 function toast(msg) {
@@ -207,7 +209,7 @@ function bootstrapView() {
 // ------------------------------------------------------------------ 首页：按角色
 async function loadOrders() {
   const { data, error } = await sb.from("orders")
-    .select("id,status,customer,address,due_date,has_issue,modified_by,created_at,updated_at,sales:profiles!orders_sales_id_fkey(name),driver:profiles!orders_driver_id_fkey(name),order_items(category,spec,qty,unit,removed,position)")
+    .select("id,status,customer,address,due_date,has_issue,modified_by,created_at,updated_at,assigned_at,started_at,delivered_at,sales:profiles!orders_sales_id_fkey(name),driver:profiles!orders_driver_id_fkey(name),order_items(category,spec,qty,unit,removed,position)")
     .order("id", { ascending: false }).limit(300);
   if (error) throw error;
   for (const o of data) o.order_items.sort((a, b) => a.position - b.position);
@@ -217,7 +219,7 @@ async function loadOrders() {
 function orderCard(o) {
   const items = itemsText(o.order_items);
   return h("a", { href: `#/order/${o.id}`, class: "ocard" },
-    h("div", { class: "meta" }, h("span", {}, `#${o.id}`), h("span", {}, fmtTime(o.updated_at))),
+    h("div", { class: "meta" }, h("span", {}, `#${o.id}`), h("span", {}, t("ordered_at", { t: "" }), timeEl(o.created_at))),
     h("div", { class: "cust" }, o.customer),
     h("div", { class: "row", style: "gap:6px" }, me.role !== "company" ? statusChip(o) : null, flagChips(o)),
     h("div", { class: "items" }, items.slice(0, 3).map((x) => h("div", {}, x)), items.length > 3 ? h("div", { class: "muted" }, t("more_items", { n: items.length })) : null),
@@ -225,7 +227,17 @@ function orderCard(o) {
       me.role === "company" ? t("sales_is", { name: o.sales?.name || "" }) : null,
       o.driver ? `${me.role === "company" ? " · " : ""}${t("driver_is", { name: o.driver.name })}` : null,
       o.due_date ? ` · ${t("due_on", { d: o.due_date })}` : null),
+    stageLine(o),
   );
+}
+// 卡片底部：最近一个环节的时间
+function stageLine(o) {
+  const [key, ts] = o.delivered_at ? ["ts_delivered", o.delivered_at] : o.started_at ? ["ts_started", o.started_at]
+    : o.assigned_at ? ["ts_assigned", o.assigned_at] : [null, null];
+  const parts = [];
+  if (key) parts.push(h("span", {}, t(key, { t: "" }), timeEl(ts)));
+  if (new Date(o.updated_at) - new Date(ts || o.created_at) > 60000) parts.push(h("span", {}, t("updated_at_k", { t: "" }), timeEl(o.updated_at)));
+  return parts.length ? h("div", { class: "tiny muted row", style: "gap:4px 10px" }, parts) : null;
 }
 
 async function homeView() {
@@ -379,12 +391,14 @@ function infoCard(d) {
   return h("section", { class: "card" }, h("h2", {}, t("delivery_info")), h("dl", { class: "kv" },
     h("dt", {}, t("address")), h("dd", {}, d.address || "—"), h("dt", {}, t("contact")), h("dd", {}, d.contact || "—"),
     h("dt", {}, t("due_date")), h("dd", {}, d.due_date || "—"), h("dt", {}, t("note")), h("dd", {}, d.note || "—"),
-    h("dt", {}, t("sales")), h("dd", {}, d.sales?.name || "—"), h("dt", {}, t("driver")), h("dd", {}, d.driver?.name || t("not_assigned"))));
+    h("dt", {}, t("sales")), h("dd", {}, d.sales?.name || "—"), h("dt", {}, t("driver")), h("dd", {}, d.driver?.name || t("not_assigned")),
+    h("dt", {}, t("ts_created")), h("dd", {}, timeEl(d.created_at, fmtFull(d.created_at))),
+    h("dt", {}, t("ts_updated")), h("dd", {}, timeEl(d.updated_at, fmtFull(d.updated_at)))));
 }
 function logCard(d) {
   return h("section", { class: "card" }, h("h2", {}, t("log_title")),
     h("ol", { class: "log" }, d.timeline.map((e) => h("li", { class: e.type === "modified" ? "hl" : "" },
-      h("span", { class: "tiny muted" }, `${e.by || t("system")} · ${viaText(e.via)} · ${fmtTime(e.at)}`),
+      h("span", { class: "tiny muted" }, `${e.by || t("system")} · ${viaText(e.via)} · `, timeEl(e.at, fmtFull(e.at))),
       h("span", {}, e.summary)))));
 }
 function stepsCard(d) {
@@ -392,7 +406,12 @@ function stepsCard(d) {
   return h("section", { class: "card" }, h("h2", {}, t("status_title")), h("ol", { class: "steps" },
     STATUS_ORDER.map((s, i) => h("li", { style: i > idx ? "color:var(--muted)" : "" },
       h("span", { class: `dot ${i < idx || (i === idx && s === "delivered") ? "done" : i === idx ? "now" : ""}` }),
-      h("span", { style: i === idx ? "font-weight:700" : "" }, statusLabel(s), i === idx && s !== "delivered" ? t("current") : "")))));
+      h("span", { style: "display:flex;flex-direction:column" },
+        h("span", { style: i === idx ? "font-weight:700" : "" }, statusLabel(s), i === idx && s !== "delivered" ? t("current") : ""),
+        stepTime(d, s) ? h("span", { class: "tiny muted" }, timeEl(stepTime(d, s), fmtFull(stepTime(d, s)))) : null)))));
+}
+function stepTime(d, s) {
+  return { pending: d.created_at, assigned: d.assigned_at, delivering: d.started_at, delivered: d.delivered_at }[s];
 }
 function photosCard(d, urls) {
   const group = (kind, title) => {
@@ -444,6 +463,9 @@ function driverView(d, urls) {
   shell(h("div", { class: "narrow stack" },
     backLink("#/", t("my_deliveries")),
     h("div", { class: "row" }, h("h1", { style: "font-size:20px" }, t("delivery_no", { id: d.id })), statusChip(d), flagChips(d)),
+    h("div", { class: "tiny muted row", style: "gap:4px 12px" },
+      d.assigned_at ? h("span", {}, t("ts_assigned", { t: "" }), timeEl(d.assigned_at, fmtFull(d.assigned_at))) : null,
+      d.started_at ? h("span", {}, t("ts_started", { t: "" }), timeEl(d.started_at, fmtFull(d.started_at))) : null),
     h("section", { class: "card" }, h("h2", { class: "small muted" }, t("where_to")),
       h("div", { style: "font-size:18px;font-weight:700" }, d.customer),
       h("div", {}, d.address || t("no_address")), h("div", { class: "muted" }, t("recipient_is", { c: d.contact || t("not_given") })),
@@ -541,7 +563,7 @@ async function notificationsView() {
     h("div", { class: "list" }, list.length ? list.map((n) => h("a", {
       href: `#/order/${n.order_id}`, class: `notice ${n.read_at ? "" : "unread"}`,
       onclick: () => { if (!n.read_at) rpc("mark_read", { p_event_ids: [n.event_id] }).then(refreshUnread); },
-    }, h("span", {}, n.summary), h("span", { class: "tiny muted" }, `${n.actor_name || ""} · ${viaText(n.via)} · ${fmtTime(n.created_at)}`)))
+    }, h("span", {}, n.summary), h("span", { class: "tiny muted" }, `${n.actor_name || ""} · ${viaText(n.via)} · `, timeEl(n.created_at))))
       : h("div", { class: "empty" }, t("no_notifications")))));
 }
 async function refreshUnread() {

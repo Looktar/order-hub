@@ -89,6 +89,7 @@ curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 订单状态：`pending` 待公司处理 → `assigned` 已派给司机 → `delivering` 送货中 → `delivered` 已送达。
 `modified_by` 不为空表示订单被公司或司机改过；`has_issue` 为 true 表示有送货问题。
 货品里的 `original_qty` 是销售最初填的数量，`qty` 是当前数量。
+时间（UTC，ISO 格式）：`created_at` 下单、`assigned_at` 派单、`started_at` 司机出发、`delivered_at` 送达、`updated_at` 最近一次变动。
 
 ## 6. 销售的 Agent
 

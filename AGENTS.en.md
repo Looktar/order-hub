@@ -91,6 +91,7 @@ curl -s "$API/photos/5" -H "Authorization: Bearer $TOKEN"
 Statuses: `pending` (waiting for the company) → `assigned` (assigned to a driver) → `delivering` (out for delivery) → `delivered`.
 `modified_by` is set when the company or the driver changed the order; `has_issue` is true when there is a delivery problem.
 For each item, `original_qty` is what the sales rep first entered and `qty` is the current quantity.
+Timestamps (UTC, ISO format): `created_at` ordered, `assigned_at` assigned, `started_at` driver left, `delivered_at` delivered, `updated_at` last change.
 
 ## 6. Sales rep's agent
 
