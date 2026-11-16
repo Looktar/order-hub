@@ -71,7 +71,7 @@ jobs:
       - name: 更新数据库
         run: scripts/apply_migrations.sh
       - name: 部署接口
-        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
       - name: 关闭自助注册（账号只能由管理员开通）
         run: |
           curl -sf -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
